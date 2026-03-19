@@ -1,6 +1,6 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeApp, type FirebaseApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider, type Auth } from 'firebase/auth';
+import { getFirestore, type Firestore } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -11,8 +11,29 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-const app = initializeApp(firebaseConfig);
+export const isFirebaseConfigured = Boolean(
+  firebaseConfig.apiKey &&
+  firebaseConfig.apiKey !== 'your-api-key' &&
+  firebaseConfig.projectId &&
+  firebaseConfig.projectId !== 'your-project-id'
+);
 
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const googleProvider = new GoogleAuthProvider();
+let app: FirebaseApp;
+let auth: Auth;
+let db: Firestore;
+
+try {
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+} catch (error) {
+  console.error('Firebase initialization error:', error);
+  // Create minimal stubs so the app doesn't crash during development
+  app = initializeApp({ apiKey: 'demo', projectId: 'demo' }, 'fallback');
+  auth = getAuth(app);
+  db = getFirestore(app);
+}
+
+const googleProvider = new GoogleAuthProvider();
+
+export { auth, db, googleProvider };
