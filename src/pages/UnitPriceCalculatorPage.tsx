@@ -53,7 +53,7 @@ export default function UnitPriceCalculatorPage() {
 
   const handleTextExtracted = (text: string) => {
     if (cameraTargetId) {
-      // Try to parse extracted text (basic implementation)
+      // TODO: Add OCR text parsing to extract price/quantity from price tags
       updateItem(cameraTargetId, 'name', text);
     }
     setShowCamera(false);
@@ -204,23 +204,27 @@ export default function UnitPriceCalculatorPage() {
             </div>
 
             {/* Unit Price Display */}
-            {results.find((r) => r.id === item.id) && (
-              <div className={`mt-3 pt-3 border-t ${isDark ? 'border-gray-700' : 'border-gray-100'}`}>
-                <div className="flex items-center justify-between">
-                  <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                    {t('unitPrice')}
-                  </span>
-                  <span className={`text-sm font-bold ${
-                    results.find((r) => r.id === item.id)?.isBestDeal
-                      ? 'text-green-600 dark:text-green-400'
-                      : isDark ? 'text-indigo-400' : 'text-indigo-600'
-                  }`}>
-                    ${results.find((r) => r.id === item.id)!.pricePerGram.toFixed(4)}
-                    {getBaseUnitLabel(item.unit)}
-                  </span>
+            {(() => {
+              const result = results.find((r) => r.id === item.id);
+              if (!result) return null;
+              return (
+                <div className={`mt-3 pt-3 border-t ${isDark ? 'border-gray-700' : 'border-gray-100'}`}>
+                  <div className="flex items-center justify-between">
+                    <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                      {t('unitPrice')}
+                    </span>
+                    <span className={`text-sm font-bold ${
+                      result.isBestDeal
+                        ? 'text-green-600 dark:text-green-400'
+                        : isDark ? 'text-indigo-400' : 'text-indigo-600'
+                    }`}>
+                      ${result.pricePerGram.toFixed(4)}
+                      {getBaseUnitLabel(item.unit)}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         ))}
       </div>

@@ -18,8 +18,9 @@ function PriceHistoryChart({ history, isDark }: { history: { date: string; price
   const plotWidth = chartWidth - padding * 2;
   const plotHeight = chartHeight - 20;
 
+  const divisor = history.length > 1 ? history.length - 1 : 1;
   const points = history.map((h, i) => {
-    const x = padding + (i / (history.length - 1)) * plotWidth;
+    const x = padding + (i / divisor) * plotWidth;
     const y = chartHeight - 10 - ((h.price - minPrice) / range) * plotHeight;
     return { x, y, price: h.price, date: h.date };
   });

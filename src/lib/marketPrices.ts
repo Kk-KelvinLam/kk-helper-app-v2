@@ -89,8 +89,12 @@ export function getMarketPriceHistory(itemName: string): { date: string; price: 
     date.setDate(date.getDate() - i);
     const dateStr = date.toISOString().split('T')[0];
     // Simulate price history working backwards from today's price
-    // Use a seeded variation based on item name and day offset for consistency
-    const seed = itemName.charCodeAt(0) + i;
+    // Use a seeded variation based on item name hash and day offset for consistency
+    let hash = 0;
+    for (let j = 0; j < itemName.length; j++) {
+      hash = ((hash << 5) - hash + itemName.charCodeAt(j)) | 0;
+    }
+    const seed = Math.abs(hash) + i * 7;
     const variation = (Math.sin(seed) * 0.5 + 0.5) * 2 - 1; // -1 to 1
     const historicalPrice = item.price - dailyChange * i + variation * Math.abs(dailyChange || 0.5);
     history.push({
