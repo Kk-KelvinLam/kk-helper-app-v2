@@ -31,6 +31,8 @@ const en = {
   tryDifferentSearch: 'Try a different search term',
   tapAddRecord: 'Tap "Add Record" to start tracking prices',
   deleteConfirm: 'Are you sure you want to delete this record?',
+  loadError: 'Failed to load records. Please try again.',
+  retry: 'Retry',
 
   // Add/Edit Record Modal
   addPurchaseTitle: 'Add Purchase Record',

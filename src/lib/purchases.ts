@@ -6,7 +6,6 @@ import {
   doc,
   query,
   where,
-  orderBy,
   getDocs,
   serverTimestamp,
   type Timestamp,
@@ -63,12 +62,11 @@ export async function getUserPurchases(
 ): Promise<PurchaseRecord[]> {
   const q = query(
     collection(db, COLLECTION_NAME),
-    where('userId', '==', userId),
-    orderBy('createdAt', 'desc')
+    where('userId', '==', userId)
   );
 
   const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map((docSnap) => {
+  const records = querySnapshot.docs.map((docSnap) => {
     const data = docSnap.data();
     return {
       id: docSnap.id,
@@ -83,6 +81,7 @@ export async function getUserPurchases(
       updatedAt: timestampToDate(data.updatedAt),
     } as PurchaseRecord;
   });
+  return records.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 }
 
 export async function searchUserPurchases(

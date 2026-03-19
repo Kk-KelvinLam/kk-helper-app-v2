@@ -31,6 +31,8 @@ const zhTW = {
   tryDifferentSearch: '試試其他搜尋字詞',
   tapAddRecord: '點擊「新增紀錄」開始追蹤價格',
   deleteConfirm: '確定要刪除此紀錄嗎？',
+  loadError: '載入紀錄失敗，請重試。',
+  retry: '重試',
 
   // Add/Edit Record Modal
   addPurchaseTitle: '新增購物紀錄',

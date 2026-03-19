@@ -15,6 +15,7 @@ export default function RecordsPage() {
   const { isDark } = useTheme();
   const [purchases, setPurchases] = useState<PurchaseRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingRecord, setEditingRecord] = useState<PurchaseRecord | null>(null);
@@ -22,11 +23,13 @@ export default function RecordsPage() {
   const loadPurchases = async () => {
     if (!user) return;
     setLoading(true);
+    setFetchError(null);
     try {
       const data = await getUserPurchases(user.uid);
       setPurchases(data);
     } catch (error) {
       console.error('Error loading purchases:', error);
+      setFetchError(t('loadError'));
     } finally {
       setLoading(false);
     }
@@ -95,6 +98,16 @@ export default function RecordsPage() {
       {loading ? (
         <div className="flex items-center justify-center py-20">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+        </div>
+      ) : fetchError ? (
+        <div className="text-center py-20">
+          <p className={`text-sm ${isDark ? 'text-red-400' : 'text-red-500'}`}>{fetchError}</p>
+          <button
+            onClick={loadPurchases}
+            className="mt-4 text-indigo-500 underline text-sm"
+          >
+            {t('retry')}
+          </button>
         </div>
       ) : filteredPurchases.length === 0 ? (
         <div className="text-center py-20">
