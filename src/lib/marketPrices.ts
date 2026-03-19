@@ -70,3 +70,34 @@ export function filterByCategory(category: string): MarketPrice[] {
     keywords.some((keyword) => item.itemName.includes(keyword))
   );
 }
+
+/**
+ * Generate simulated 7-day price history for a given item.
+ * In production, this would fetch from a real API.
+ * The data shown is simulated based on the current price and change values.
+ */
+export function getMarketPriceHistory(itemName: string): { date: string; price: number }[] {
+  const item = HK_MARKET_PRICES.find((p) => p.itemName === itemName);
+  if (!item) return [];
+
+  const today = new Date();
+  const history: { date: string; price: number }[] = [];
+  const dailyChange = item.change ?? 0;
+
+  for (let i = 6; i >= 0; i--) {
+    const date = new Date(today);
+    date.setDate(date.getDate() - i);
+    const dateStr = date.toISOString().split('T')[0];
+    // Simulate price history working backwards from today's price
+    // Use a seeded variation based on item name and day offset for consistency
+    const seed = itemName.charCodeAt(0) + i;
+    const variation = (Math.sin(seed) * 0.5 + 0.5) * 2 - 1; // -1 to 1
+    const historicalPrice = item.price - dailyChange * i + variation * Math.abs(dailyChange || 0.5);
+    history.push({
+      date: dateStr,
+      price: Math.max(0.1, Number(historicalPrice.toFixed(1))),
+    });
+  }
+
+  return history;
+}

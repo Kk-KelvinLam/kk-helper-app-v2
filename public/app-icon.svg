@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <clipPath id="circle"><circle cx="256" cy="256" r="256"/></clipPath>
+  </defs>
+  <!-- Background -->
+  <circle cx="256" cy="256" r="256" fill="#fff"/>
+  <!-- Body/Outfit -->
+  <path d="M160 340 L180 500 L332 500 L352 340 Z" fill="#e53e3e"/>
+  <path d="M220 340 L230 500 L282 500 L292 340 Z" fill="#fff"/>
+  <!-- Face -->
+  <ellipse cx="256" cy="260" rx="105" ry="100" fill="#f0c8a0"/>
+  <!-- Hair -->
+  <path d="M150 230 Q150 130 256 120 Q362 130 362 230 Q362 180 256 170 Q150 180 150 230 Z" fill="#1a1a1a"/>
+  <ellipse cx="256" cy="180" rx="115" ry="70" fill="#1a1a1a"/>
+  <!-- Left Horn -->
+  <path d="M170 160 L140 80 L190 140 Z" fill="#e53e3e"/>
+  <!-- Right Horn -->
+  <path d="M342 160 L372 80 L322 140 Z" fill="#e53e3e"/>
+  <!-- Glasses -->
+  <ellipse cx="220" cy="250" rx="30" ry="25" fill="none" stroke="#1a1a1a" stroke-width="5"/>
+  <ellipse cx="292" cy="250" rx="30" ry="25" fill="none" stroke="#1a1a1a" stroke-width="5"/>
+  <line x1="250" y1="248" x2="262" y2="248" stroke="#1a1a1a" stroke-width="5"/>
+  <line x1="152" y1="245" x2="190" y2="248" stroke="#1a1a1a" stroke-width="4"/>
+  <line x1="322" y1="248" x2="360" y2="245" stroke="#1a1a1a" stroke-width="4"/>
+  <!-- Eyes -->
+  <circle cx="220" cy="252" r="6" fill="#1a1a1a"/>
+  <circle cx="292" cy="252" r="6" fill="#1a1a1a"/>
+  <circle cx="222" cy="250" r="2" fill="#fff"/>
+  <circle cx="294" cy="250" r="2" fill="#fff"/>
+  <!-- Eyebrows -->
+  <path d="M200 225 Q220 215 240 225" fill="none" stroke="#1a1a1a" stroke-width="5" stroke-linecap="round"/>
+  <path d="M272 225 Q292 215 312 225" fill="none" stroke="#1a1a1a" stroke-width="5" stroke-linecap="round"/>
+  <!-- Mouth (big smile) -->
+  <path d="M205 290 Q256 340 307 290" fill="#fff" stroke="#1a1a1a" stroke-width="4"/>
+  <path d="M205 290 Q256 295 307 290" fill="none" stroke="#1a1a1a" stroke-width="3"/>
+  <!-- Teeth -->
+  <rect x="230" y="290" width="52" height="18" rx="2" fill="#fff"/>
+  <line x1="256" y1="290" x2="256" y2="308" stroke="#e5e5e5" stroke-width="1"/>
+  <!-- Trident -->
+  <g transform="translate(380, 200) rotate(15)">
+    <line x1="0" y1="30" x2="0" y2="180" stroke="#e53e3e" stroke-width="8" stroke-linecap="round"/>
+    <path d="M0 30 L0 0 M-18 25 Q-20 5 0 0 Q20 5 18 25" fill="none" stroke="#e53e3e" stroke-width="7" stroke-linecap="round"/>
+    <path d="M-18 25 L-22 8" fill="none" stroke="#e53e3e" stroke-width="6" stroke-linecap="round"/>
+    <path d="M18 25 L22 8" fill="none" stroke="#e53e3e" stroke-width="6" stroke-linecap="round"/>
+  </g>
+</svg>
