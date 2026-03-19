@@ -84,6 +84,44 @@ npm run build
 npx firebase deploy
 ```
 
+## CI/CD with GitHub Actions
+
+This project uses GitHub Actions to automatically deploy to Firebase Hosting:
+
+- **`firebase-deploy.yml`** — Deploys to the live channel on every push to `main`
+- **`firebase-preview.yml`** — Deploys a preview channel for every pull request to `main`
+
+### Required GitHub Secrets
+
+Go to your repository **Settings → Secrets and variables → Actions** and add the following secrets:
+
+| Secret | Description |
+|--------|-------------|
+| `VITE_FIREBASE_API_KEY` | Firebase Web API key |
+| `VITE_FIREBASE_AUTH_DOMAIN` | Firebase Auth domain (e.g. `your-project.firebaseapp.com`) |
+| `VITE_FIREBASE_PROJECT_ID` | Firebase project ID |
+| `VITE_FIREBASE_STORAGE_BUCKET` | Firebase Storage bucket |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | Firebase messaging sender ID |
+| `VITE_FIREBASE_APP_ID` | Firebase app ID |
+| `FIREBASE_SERVICE_ACCOUNT` | Firebase service account JSON (see below) |
+
+### How to get `FIREBASE_SERVICE_ACCOUNT`
+
+The `FIREBASE_SERVICE_ACCOUNT` secret is a **Google Cloud service account key in JSON format** that allows GitHub Actions to authenticate with Firebase on your behalf.
+
+**Steps to generate it:**
+
+1. Go to the [Firebase Console](https://console.firebase.google.com) and open your project
+2. Click the ⚙️ **Project settings** gear icon (top-left)
+3. Go to the **Service accounts** tab
+4. Click **Generate new private key** → **Generate key**
+5. A `.json` file will be downloaded — open it in a text editor and **copy the entire contents**
+6. In your GitHub repository, go to **Settings → Secrets and variables → Actions**
+7. Click **New repository secret**, name it `FIREBASE_SERVICE_ACCOUNT`, and paste the JSON as the value
+8. Click **Add secret**
+
+> ⚠️ Keep the service account JSON private. Never commit it to the repository.
+
 ## Available Scripts
 
 | Script | Description |
