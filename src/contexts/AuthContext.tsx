@@ -1,8 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import {
   onAuthStateChanged,
-  signInWithRedirect,
-  getRedirectResult,
+  signInWithPopup,
   signOut as firebaseSignOut,
   type User as FirebaseUser,
 } from 'firebase/auth';
@@ -35,9 +34,11 @@ function getErrorMessage(error: unknown): string {
     switch (code) {
       case 'auth/unauthorized-domain':
         return 'This domain is not authorized for sign-in. Please contact the developer.';
-      case 'auth/redirect-cancelled-by-user':
+      case 'auth/popup-closed-by-user':
         return 'Sign-in was cancelled. Please try again.';
-      case 'auth/redirect-operation-pending':
+      case 'auth/popup-blocked':
+        return 'Sign-in popup was blocked. Please allow popups for this site.';
+      case 'auth/cancelled-popup-request':
         return 'A sign-in is already in progress. Please wait.';
       case 'auth/network-request-failed':
         return 'Network error. Please check your connection and try again.';
@@ -55,12 +56,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!isFirebaseConfigured) return;
-
-    // Handle the result when the user returns from the Google sign-in redirect
-    getRedirectResult(auth).catch((redirectError) => {
-      console.error('Redirect sign-in error:', redirectError);
-      setError(getErrorMessage(redirectError));
-    });
 
     const unsubscribe = onAuthStateChanged(
       auth,
@@ -83,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = async () => {
     try {
       setError(null);
-      await signInWithRedirect(auth, googleProvider);
+      await signInWithPopup(auth, googleProvider);
     } catch (signInError) {
       console.error('Sign in error:', signInError);
       const message = getErrorMessage(signInError);
