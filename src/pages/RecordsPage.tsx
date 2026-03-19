@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { getUserPurchases, deletePurchase } from '@/lib/purchases';
 import type { PurchaseRecord } from '@/types';
 import AddRecordModal from '@/components/AddRecordModal';
@@ -9,6 +11,8 @@ import { Plus, Search, Package } from 'lucide-react';
 
 export default function RecordsPage() {
   const { user } = useAuth();
+  const { t } = useLanguage();
+  const { isDark } = useTheme();
   const [purchases, setPurchases] = useState<PurchaseRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -34,7 +38,7 @@ export default function RecordsPage() {
   }, [user]);
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this record?')) return;
+    if (!confirm(t('deleteConfirm'))) return;
     try {
       await deletePurchase(id);
       setPurchases((prev) => prev.filter((p) => p.id !== id));
@@ -57,9 +61,9 @@ export default function RecordsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">購物紀錄</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            {purchases.length} records saved
+          <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{t('recordsTitle')}</h1>
+          <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+            {t('recordsSaved', { count: purchases.length })}
           </p>
         </div>
         <button
@@ -67,19 +71,23 @@ export default function RecordsPage() {
           className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-5 rounded-xl transition-colors shadow-sm"
         >
           <Plus className="w-5 h-5" />
-          <span className="hidden sm:inline">Add Record</span>
+          <span className="hidden sm:inline">{t('addRecord')}</span>
         </button>
       </div>
 
       {/* Search */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+        <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
         <input
           type="text"
-          placeholder="Search items, categories, or locations..."
+          placeholder={t('searchPlaceholder')}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
+          className={`w-full pl-10 pr-4 py-3 rounded-xl border outline-none transition-all ${
+            isDark
+              ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent'
+              : 'border-gray-200 bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent'
+          }`}
         />
       </div>
 
@@ -90,14 +98,14 @@ export default function RecordsPage() {
         </div>
       ) : filteredPurchases.length === 0 ? (
         <div className="text-center py-20">
-          <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-600">
-            {searchTerm ? 'No matching records' : 'No records yet'}
+          <Package className={`w-16 h-16 mx-auto mb-4 ${isDark ? 'text-gray-600' : 'text-gray-300'}`} />
+          <h3 className={`text-lg font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+            {searchTerm ? t('noMatchingRecords') : t('noRecordsYet')}
           </h3>
-          <p className="text-gray-400 mt-1">
+          <p className={`mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
             {searchTerm
-              ? 'Try a different search term'
-              : 'Tap "Add Record" to start tracking prices'}
+              ? t('tryDifferentSearch')
+              : t('tapAddRecord')}
           </p>
         </div>
       ) : (

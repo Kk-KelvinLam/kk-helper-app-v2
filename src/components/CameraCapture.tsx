@@ -1,4 +1,6 @@
 import { useState, useRef } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { Camera, Upload, X, Loader2 } from 'lucide-react';
 
 interface CameraCaptureProps {
@@ -7,6 +9,8 @@ interface CameraCaptureProps {
 }
 
 export default function CameraCapture({ onTextExtracted, onClose }: CameraCaptureProps) {
+  const { t } = useLanguage();
+  const { isDark } = useTheme();
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +52,7 @@ export default function CameraCapture({ onTextExtracted, onClose }: CameraCaptur
       const extractedText = 'Image captured successfully. Please enter item details manually.';
       onTextExtracted(extractedText);
     } catch {
-      setError('Failed to process image. Please try again or enter details manually.');
+      setError(t('imageProcessError'));
     } finally {
       setProcessing(false);
     }
@@ -56,14 +60,14 @@ export default function CameraCapture({ onTextExtracted, onClose }: CameraCaptur
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+      <div className={`rounded-2xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">📸 Capture Receipt</h2>
+          <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>{t('captureReceipt')}</h2>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
           >
-            <X className="w-5 h-5 text-gray-500" />
+            <X className={`w-5 h-5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
           </button>
         </div>
 
@@ -74,14 +78,18 @@ export default function CameraCapture({ onTextExtracted, onClose }: CameraCaptur
               className="w-full flex items-center justify-center gap-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-6 rounded-xl transition-colors"
             >
               <Camera className="w-5 h-5" />
-              Take Photo
+              {t('takePhoto')}
             </button>
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-50 text-gray-700 font-medium py-3 px-6 rounded-xl transition-colors border border-gray-200"
+              className={`w-full flex items-center justify-center gap-3 font-medium py-3 px-6 rounded-xl transition-colors border ${
+                isDark
+                  ? 'bg-gray-700 hover:bg-gray-600 text-gray-200 border-gray-600'
+                  : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200'
+              }`}
             >
               <Upload className="w-5 h-5" />
-              Upload Image
+              {t('uploadImage')}
             </button>
             <input
               ref={cameraInputRef}
@@ -98,22 +106,22 @@ export default function CameraCapture({ onTextExtracted, onClose }: CameraCaptur
               onChange={handleFileChange}
               className="hidden"
             />
-            <p className="text-xs text-gray-400 text-center mt-4">
-              Take a photo of a receipt or price tag to extract item details
+            <p className={`text-xs text-center mt-4 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+              {t('captureHint')}
             </p>
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="relative rounded-xl overflow-hidden border border-gray-200">
+            <div className={`relative rounded-xl overflow-hidden border ${isDark ? 'border-gray-600' : 'border-gray-200'}`}>
               <img
                 src={imagePreview}
                 alt="Captured"
-                className="w-full max-h-64 object-contain bg-gray-50"
+                className={`w-full max-h-64 object-contain ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}
               />
             </div>
 
             {error && (
-              <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg">
+              <div className={`text-sm p-3 rounded-lg ${isDark ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-600'}`}>
                 {error}
               </div>
             )}
@@ -121,9 +129,13 @@ export default function CameraCapture({ onTextExtracted, onClose }: CameraCaptur
             <div className="flex gap-3">
               <button
                 onClick={() => { setImagePreview(null); setError(null); }}
-                className="flex-1 py-2.5 px-4 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors font-medium"
+                className={`flex-1 py-2.5 px-4 rounded-xl border font-medium transition-colors ${
+                  isDark
+                    ? 'border-gray-600 text-gray-300 hover:bg-gray-700'
+                    : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}
               >
-                Retake
+                {t('retake')}
               </button>
               <button
                 onClick={extractTextFromImage}
@@ -133,10 +145,10 @@ export default function CameraCapture({ onTextExtracted, onClose }: CameraCaptur
                 {processing ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Processing...
+                    {t('processing')}
                   </>
                 ) : (
-                  'Extract Text'
+                  t('extractText')
                 )}
               </button>
             </div>
