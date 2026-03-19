@@ -1,8 +1,20 @@
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { LogIn } from 'lucide-react';
+import { LogIn, Loader2, AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
-  const { signInWithGoogle } = useAuth();
+  const { signInWithGoogle, error } = useAuth();
+  const [isSigningIn, setIsSigningIn] = useState(false);
+
+  const handleSignIn = async () => {
+    setIsSigningIn(true);
+    try {
+      await signInWithGoogle();
+    } catch {
+      // Error is handled and stored in AuthContext; reset button state
+      setIsSigningIn(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center p-4">
@@ -23,12 +35,24 @@ export default function LoginPage() {
             Sign in to get started
           </h3>
 
+          {error && (
+            <div className="flex items-start gap-2 mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+              <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
           <button
-            onClick={signInWithGoogle}
-            className="w-full flex items-center justify-center gap-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-6 rounded-xl transition-colors duration-200 shadow-sm hover:shadow-md"
+            onClick={handleSignIn}
+            disabled={isSigningIn}
+            className="w-full flex items-center justify-center gap-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium py-3 px-6 rounded-xl transition-colors duration-200 shadow-sm hover:shadow-md"
           >
-            <LogIn className="w-5 h-5" />
-            Sign in with Google
+            {isSigningIn ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <LogIn className="w-5 h-5" />
+            )}
+            {isSigningIn ? 'Signing in…' : 'Sign in with Google'}
           </button>
 
           <div className="mt-6 space-y-3">
