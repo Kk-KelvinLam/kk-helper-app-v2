@@ -66,6 +66,9 @@ const en = {
   cameraNotAvailable: 'Camera is not available. Please use the upload option instead.',
   noTextDetected: 'No text detected in the image.',
 
+  // OCR fill feedback
+  ocrFieldsFilled: '✓ Fields auto-filled from image. Please review and correct if needed.',
+
   // Market Price Page
   marketTitle: "Today's Market",
   marketSubtitle: 'Hong Kong market prices',
@@ -76,6 +79,10 @@ const en = {
   marketDisclaimer: '💡 Prices shown are estimated averages for Hong Kong markets and supermarkets. Actual prices may vary by location and availability. Data is for reference only.',
   priceHistory: 'Price History (7 days)',
   close: 'Close',
+  refreshPrices: 'Refresh prices',
+  liveData: 'Live data',
+  staticData: 'Reference data',
+  lastUpdated: 'Updated',
 
   // Unit Price Calculator
   calcTitle: 'Unit Price Calculator',

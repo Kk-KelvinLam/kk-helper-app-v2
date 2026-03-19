@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { getMarketPrices, searchMarketPrices, getMarketPriceCategories, filterByCategory, getMarketPriceHistory } from '@/lib/marketPrices';
+import { getMarketPrices, searchMarketPrices, getMarketPriceCategories, filterByCategory, getMarketPriceHistory, refreshMarketPrices } from '@/lib/marketPrices';
 import type { MarketPrice } from '@/types';
-import { Search, TrendingUp, TrendingDown, Minus, X } from 'lucide-react';
+import { Search, TrendingUp, TrendingDown, Minus, X, RefreshCw, Wifi, WifiOff } from 'lucide-react';
 
 function PriceHistoryChart({ history, isDark }: { history: { date: string; price: number }[]; isDark: boolean }) {
   if (history.length === 0) return null;
@@ -66,7 +66,26 @@ export default function MarketPricePage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('全部 All');
   const [selectedItem, setSelectedItem] = useState<MarketPrice | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLiveData, setIsLiveData] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const categories = getMarketPriceCategories();
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const { isLive } = await refreshMarketPrices();
+      setIsLiveData(isLive);
+      setLastUpdated(new Date());
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, []);
+
+  // Attempt a refresh on first mount
+  useEffect(() => {
+    handleRefresh();
+  }, [handleRefresh]);
 
   let prices: MarketPrice[];
   if (searchTerm) {
@@ -87,10 +106,40 @@ export default function MarketPricePage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{t('marketTitle')}</h1>
-        <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-          {t('marketSubtitle')} · {today}
-        </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{t('marketTitle')}</h1>
+            <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+              {t('marketSubtitle')} · {today}
+            </p>
+          </div>
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className={`p-2 rounded-lg transition-colors mt-1 ${
+              isDark
+                ? 'text-gray-400 hover:text-indigo-400 hover:bg-gray-700 disabled:opacity-40'
+                : 'text-gray-500 hover:text-indigo-600 hover:bg-gray-100 disabled:opacity-40'
+            }`}
+            title={t('refreshPrices')}
+          >
+            <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+        {lastUpdated && (
+          <div className={`flex items-center gap-1.5 mt-1.5 text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+            {isLiveData ? (
+              <Wifi className="w-3.5 h-3.5 text-green-500" />
+            ) : (
+              <WifiOff className="w-3.5 h-3.5" />
+            )}
+            <span>
+              {isLiveData ? t('liveData') : t('staticData')}
+              {' · '}
+              {t('lastUpdated')}: {lastUpdated.toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Search */}

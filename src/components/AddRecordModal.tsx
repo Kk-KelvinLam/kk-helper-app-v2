@@ -4,8 +4,9 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { addPurchase } from '@/lib/purchases';
 import { CATEGORIES, LOCATIONS, type PurchaseFormData } from '@/types';
+import { parseReceiptText } from '@/lib/ocrParser';
 import CameraCapture from './CameraCapture';
-import { X, Camera, Loader2 } from 'lucide-react';
+import { X, Camera, Loader2, CheckCircle2 } from 'lucide-react';
 
 interface AddRecordModalProps {
   onClose: () => void;
@@ -18,6 +19,7 @@ export default function AddRecordModal({ onClose, onSaved }: AddRecordModalProps
   const { isDark } = useTheme();
   const [saving, setSaving] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
+  const [ocrFilled, setOcrFilled] = useState(false);
   const [form, setForm] = useState<PurchaseFormData>({
     itemName: '',
     price: '',
@@ -43,7 +45,20 @@ export default function AddRecordModal({ onClose, onSaved }: AddRecordModalProps
   };
 
   const handleTextExtracted = (text: string) => {
-    setForm((prev) => ({ ...prev, notes: text }));
+    const parsed = parseReceiptText(text);
+    setForm((prev) => ({
+      ...prev,
+      itemName: parsed.itemName || prev.itemName,
+      price: parsed.price || prev.price,
+      location: parsed.location
+        ? (LOCATIONS.find((l) => l === parsed.location) ?? prev.location)
+        : prev.location,
+      category: parsed.category
+        ? (CATEGORIES.find((c) => c === parsed.category) ?? prev.category)
+        : prev.category,
+      notes: parsed.notes,
+    }));
+    setOcrFilled(true);
     setShowCamera(false);
   };
 
@@ -149,6 +164,14 @@ export default function AddRecordModal({ onClose, onSaved }: AddRecordModalProps
                 className={`${inputClass} resize-none`}
               />
             </div>
+
+            {/* OCR fill confirmation */}
+            {ocrFilled && (
+              <div className={`flex items-center gap-2 text-sm p-3 rounded-lg ${isDark ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-green-700'}`}>
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                {t('ocrFieldsFilled')}
+              </div>
+            )}
 
             {/* Camera Button */}
             <button

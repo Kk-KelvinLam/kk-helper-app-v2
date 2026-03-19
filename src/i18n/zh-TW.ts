@@ -66,6 +66,9 @@ const zhTW = {
   cameraNotAvailable: '相機不可用。請改用上傳圖片功能。',
   noTextDetected: '圖片中未偵測到文字。',
 
+  // OCR fill feedback
+  ocrFieldsFilled: '✓ 已從圖片自動填寫欄位，請檢查並更正如有需要。',
+
   // Market Price Page
   marketTitle: '今日行情',
   marketSubtitle: '香港市場價格',
@@ -76,6 +79,10 @@ const zhTW = {
   marketDisclaimer: '💡 所顯示的價格為香港街市及超市的估計平均價格。實際價格可能因地點及供應情況而異。資料僅供參考。',
   priceHistory: '價格走勢 (7日)',
   close: '關閉',
+  refreshPrices: '更新價格',
+  liveData: '實時數據',
+  staticData: '參考數據',
+  lastUpdated: '更新時間',
 
   // Unit Price Calculator
   calcTitle: '單位價格計算機',

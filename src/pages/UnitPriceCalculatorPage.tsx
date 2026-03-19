@@ -7,6 +7,7 @@ import {
   SUPPORTED_UNITS,
   type UnitPriceItem,
 } from '@/lib/unitPriceCalculator';
+import { parsePriceTagText } from '@/lib/ocrParser';
 import CameraCapture from '@/components/CameraCapture';
 import { Plus, Trash2, Trophy, Camera, X } from 'lucide-react';
 
@@ -53,8 +54,19 @@ export default function UnitPriceCalculatorPage() {
 
   const handleTextExtracted = (text: string) => {
     if (cameraTargetId) {
-      // TODO: Add OCR text parsing to extract price/quantity from price tags
-      updateItem(cameraTargetId, 'name', text);
+      const parsed = parsePriceTagText(text);
+      setItems((prev) =>
+        prev.map((item) => {
+          if (item.id !== cameraTargetId) return item;
+          return {
+            ...item,
+            name: parsed.name || item.name,
+            price: parsed.price || item.price,
+            quantity: parsed.quantity || item.quantity,
+            unit: parsed.unit || item.unit,
+          };
+        })
+      );
     }
     setShowCamera(false);
     setCameraTargetId(null);
