@@ -62,6 +62,9 @@ const en = {
   extractText: 'Extract Text',
   processing: 'Processing...',
   imageProcessError: 'Failed to process image. Please try again or enter details manually.',
+  cameraPermissionDenied: 'Camera access was denied. Please allow camera permission in your browser settings.',
+  cameraNotAvailable: 'Camera is not available. Please use the upload option instead.',
+  noTextDetected: 'No text detected in the image.',
 
   // Market Price Page
   marketTitle: "Today's Market",

@@ -62,6 +62,9 @@ const zhTW = {
   extractText: '提取文字',
   processing: '處理中...',
   imageProcessError: '圖片處理失敗。請重試或手動輸入資料。',
+  cameraPermissionDenied: '相機存取被拒絕。請在瀏覽器設定中允許相機權限。',
+  cameraNotAvailable: '相機不可用。請改用上傳圖片功能。',
+  noTextDetected: '圖片中未偵測到文字。',
 
   // Market Price Page
   marketTitle: '今日行情',

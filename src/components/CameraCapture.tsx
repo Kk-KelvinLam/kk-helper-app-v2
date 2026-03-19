@@ -1,21 +1,77 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Camera, Upload, X, Loader2 } from 'lucide-react';
+import Tesseract from 'tesseract.js';
 
 interface CameraCaptureProps {
   onTextExtracted: (text: string) => void;
   onClose: () => void;
 }
 
+type CameraState = 'idle' | 'streaming' | 'preview';
+
 export default function CameraCapture({ onTextExtracted, onClose }: CameraCaptureProps) {
   const { t } = useLanguage();
   const { isDark } = useTheme();
+  const [cameraState, setCameraState] = useState<CameraState>('idle');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, [stopCamera]);
+
+  const startCamera = async () => {
+    setError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      setCameraState('streaming');
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'NotAllowedError') {
+        setError(t('cameraPermissionDenied'));
+      } else {
+        setError(t('cameraNotAvailable'));
+      }
+    }
+  };
+
+  const capturePhoto = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.drawImage(video, 0, 0);
+    const dataUrl = canvas.toDataURL('image/png');
+    setImagePreview(dataUrl);
+    stopCamera();
+    setCameraState('preview');
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -24,9 +80,16 @@ export default function CameraCapture({ onTextExtracted, onClose }: CameraCaptur
     const reader = new FileReader();
     reader.onload = (event) => {
       setImagePreview(event.target?.result as string);
+      setCameraState('preview');
       setError(null);
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleRetake = () => {
+    setImagePreview(null);
+    setError(null);
+    setCameraState('idle');
   };
 
   const extractTextFromImage = async () => {
@@ -36,26 +99,19 @@ export default function CameraCapture({ onTextExtracted, onClose }: CameraCaptur
     setError(null);
 
     try {
-      // Simple client-side text extraction using canvas
-      // For production, you'd use Tesseract.js or a cloud OCR API
-      const img = new Image();
-      img.src = imagePreview;
-      await new Promise((resolve) => { img.onload = resolve; });
-
-      // Simulate OCR processing
-      // In a real implementation, you'd use:
-      // import Tesseract from 'tesseract.js';
-      // const result = await Tesseract.recognize(imagePreview, 'chi_tra+eng');
-      // onTextExtracted(result.data.text);
-
-      // For now, provide a helpful message
-      const extractedText = 'Image captured successfully. Please enter item details manually.';
-      onTextExtracted(extractedText);
+      const result = await Tesseract.recognize(imagePreview, 'eng+chi_tra');
+      const text = result.data.text.trim();
+      onTextExtracted(text || t('noTextDetected'));
     } catch {
       setError(t('imageProcessError'));
     } finally {
       setProcessing(false);
     }
+  };
+
+  const handleClose = () => {
+    stopCamera();
+    onClose();
   };
 
   return (
@@ -64,17 +120,19 @@ export default function CameraCapture({ onTextExtracted, onClose }: CameraCaptur
         <div className="flex items-center justify-between mb-4">
           <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>{t('captureReceipt')}</h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
           >
             <X className={`w-5 h-5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
           </button>
         </div>
 
-        {!imagePreview ? (
+        <canvas ref={canvasRef} className="hidden" />
+
+        {cameraState === 'idle' && (
           <div className="space-y-3">
             <button
-              onClick={() => cameraInputRef.current?.click()}
+              onClick={startCamera}
               className="w-full flex items-center justify-center gap-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-6 rounded-xl transition-colors"
             >
               <Camera className="w-5 h-5" />
@@ -92,25 +150,57 @@ export default function CameraCapture({ onTextExtracted, onClose }: CameraCaptur
               {t('uploadImage')}
             </button>
             <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-            <input
               ref={fileInputRef}
               type="file"
               accept="image/*"
               onChange={handleFileChange}
               className="hidden"
             />
+            {error && (
+              <div className={`text-sm p-3 rounded-lg ${isDark ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-600'}`}>
+                {error}
+              </div>
+            )}
             <p className={`text-xs text-center mt-4 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
               {t('captureHint')}
             </p>
           </div>
-        ) : (
+        )}
+
+        {cameraState === 'streaming' && (
+          <div className="space-y-4">
+            <div className={`relative rounded-xl overflow-hidden border ${isDark ? 'border-gray-600' : 'border-gray-200'}`}>
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className={`w-full rounded-xl ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { stopCamera(); setCameraState('idle'); }}
+                className={`flex-1 py-2.5 px-4 rounded-xl border font-medium transition-colors ${
+                  isDark
+                    ? 'border-gray-600 text-gray-300 hover:bg-gray-700'
+                    : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {t('cancel')}
+              </button>
+              <button
+                onClick={capturePhoto}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-colors font-medium flex items-center justify-center gap-2"
+              >
+                <Camera className="w-4 h-4" />
+                {t('takePhoto')}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {cameraState === 'preview' && imagePreview && (
           <div className="space-y-4">
             <div className={`relative rounded-xl overflow-hidden border ${isDark ? 'border-gray-600' : 'border-gray-200'}`}>
               <img
@@ -128,7 +218,7 @@ export default function CameraCapture({ onTextExtracted, onClose }: CameraCaptur
 
             <div className="flex gap-3">
               <button
-                onClick={() => { setImagePreview(null); setError(null); }}
+                onClick={handleRetake}
                 className={`flex-1 py-2.5 px-4 rounded-xl border font-medium transition-colors ${
                   isDark
                     ? 'border-gray-600 text-gray-300 hover:bg-gray-700'
