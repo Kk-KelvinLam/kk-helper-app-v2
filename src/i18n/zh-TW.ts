@@ -207,6 +207,8 @@ const zhTW = {
   bpMmHg: 'mmHg',
   bpRecordsSaved: '已儲存 {count} 筆量測',
   bpLoadError: '載入量測紀錄失敗，請重試。',
+  bpScanReading: '掃描血壓機',
+  bpCaptureHint: '拍攝血壓機螢幕以自動填寫數值',
 
   // Categories
   allCategories: '全部',

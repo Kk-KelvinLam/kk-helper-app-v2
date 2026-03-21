@@ -207,6 +207,8 @@ const en = {
   bpMmHg: 'mmHg',
   bpRecordsSaved: '{count} readings saved',
   bpLoadError: 'Failed to load readings. Please try again.',
+  bpScanReading: 'Scan BP Monitor',
+  bpCaptureHint: 'Take a photo of your blood pressure monitor to auto-fill readings',
 
   // Categories
   allCategories: 'All',

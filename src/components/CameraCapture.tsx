@@ -7,11 +7,13 @@ import Tesseract from 'tesseract.js';
 interface CameraCaptureProps {
   onTextExtracted: (text: string) => void;
   onClose: () => void;
+  title?: string;
+  hint?: string;
 }
 
 type CameraState = 'idle' | 'streaming' | 'preview';
 
-export default function CameraCapture({ onTextExtracted, onClose }: CameraCaptureProps) {
+export default function CameraCapture({ onTextExtracted, onClose, title, hint }: CameraCaptureProps) {
   const { t } = useLanguage();
   const { isDark } = useTheme();
   const [cameraState, setCameraState] = useState<CameraState>('idle');
@@ -126,7 +128,7 @@ export default function CameraCapture({ onTextExtracted, onClose }: CameraCaptur
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
       <div className={`rounded-2xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>{t('captureReceipt')}</h2>
+          <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>{title || t('captureReceipt')}</h2>
           <button
             onClick={handleClose}
             className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
@@ -170,7 +172,7 @@ export default function CameraCapture({ onTextExtracted, onClose }: CameraCaptur
               </div>
             )}
             <p className={`text-xs text-center mt-4 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-              {t('captureHint')}
+              {hint || t('captureHint')}
             </p>
           </div>
         )}
