@@ -36,6 +36,12 @@ export default function CameraCapture({ onTextExtracted, onClose }: CameraCaptur
     };
   }, [stopCamera]);
 
+  useEffect(() => {
+    if (cameraState === 'streaming' && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [cameraState]);
+
   const startCamera = async () => {
     setError(null);
     try {
@@ -48,9 +54,6 @@ export default function CameraCapture({ onTextExtracted, onClose }: CameraCaptur
         stream = await navigator.mediaDevices.getUserMedia({ video: true });
       }
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
       setCameraState('streaming');
     } catch (err) {
       if (err instanceof DOMException && err.name === 'NotAllowedError') {
