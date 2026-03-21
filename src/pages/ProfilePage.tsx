@@ -30,7 +30,7 @@ export default function ProfilePage() {
   // Scanner state
   const [scanning, setScanning] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
-  const scannerContainerRef = useRef<string>('qr-reader-' + Math.random().toString(36).slice(2));
+  const [scannerContainerId] = useState(() => 'qr-reader-' + Math.random().toString(36).slice(2));
 
   // Shared records view
   const [viewingSharedFrom, setViewingSharedFrom] = useState<ShareRecord | null>(null);
@@ -113,7 +113,7 @@ export default function ProfilePage() {
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     try {
-      const scanner = new Html5Qrcode(scannerContainerRef.current);
+      const scanner = new Html5Qrcode(scannerContainerId);
       scannerRef.current = scanner;
 
       await scanner.start(
@@ -231,8 +231,6 @@ export default function ProfilePage() {
               <PurchaseCard
                 key={purchase.id}
                 purchase={purchase}
-                onEdit={() => {}}
-                onDelete={() => {}}
                 readOnly
               />
             ))}
@@ -326,7 +324,7 @@ export default function ProfilePage() {
 
         {scanning && (
           <div
-            id={scannerContainerRef.current}
+            id={scannerContainerId}
             className="mb-4 rounded-xl overflow-hidden"
           />
         )}

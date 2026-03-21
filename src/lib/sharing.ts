@@ -1,11 +1,12 @@
 import {
   collection,
-  addDoc,
+  setDoc,
   deleteDoc,
   doc,
   query,
   where,
   getDocs,
+  getDoc,
   serverTimestamp,
   type Timestamp,
 } from 'firebase/firestore';
@@ -21,20 +22,31 @@ function timestampToDate(ts: Timestamp | Date | undefined): Date {
 }
 
 /**
+ * Generate a deterministic share document ID.
+ */
+function getShareDocId(ownerUserId: string, sharedWithUserId: string): string {
+  return `${ownerUserId}_${sharedWithUserId}`;
+}
+
+/**
  * Add a share: owner shares their records with another user.
+ * Uses deterministic document IDs so Firestore rules can use exists().
  * Prevents duplicate shares.
  */
 export async function addShare(
   owner: User,
   sharedWith: User
 ): Promise<string> {
+  const docId = getShareDocId(owner.uid, sharedWith.uid);
+
   // Check if share already exists
-  const existing = await getExistingShare(owner.uid, sharedWith.uid);
-  if (existing) {
-    return existing.id;
+  const docRef = doc(db, COLLECTION_NAME, docId);
+  const existing = await getDoc(docRef);
+  if (existing.exists()) {
+    return docId;
   }
 
-  const docRef = await addDoc(collection(db, COLLECTION_NAME), {
+  await setDoc(docRef, {
     ownerUserId: owner.uid,
     ownerDisplayName: owner.displayName ?? '',
     ownerEmail: owner.email ?? '',
@@ -43,35 +55,7 @@ export async function addShare(
     sharedWithEmail: sharedWith.email ?? '',
     createdAt: serverTimestamp(),
   });
-  return docRef.id;
-}
-
-/**
- * Check if a share already exists between two users.
- */
-async function getExistingShare(
-  ownerUserId: string,
-  sharedWithUserId: string
-): Promise<ShareRecord | null> {
-  const q = query(
-    collection(db, COLLECTION_NAME),
-    where('ownerUserId', '==', ownerUserId),
-    where('sharedWithUserId', '==', sharedWithUserId)
-  );
-  const snapshot = await getDocs(q);
-  if (snapshot.empty) return null;
-  const docSnap = snapshot.docs[0];
-  const data = docSnap.data();
-  return {
-    id: docSnap.id,
-    ownerUserId: data.ownerUserId,
-    ownerDisplayName: data.ownerDisplayName,
-    ownerEmail: data.ownerEmail,
-    sharedWithUserId: data.sharedWithUserId,
-    sharedWithDisplayName: data.sharedWithDisplayName,
-    sharedWithEmail: data.sharedWithEmail,
-    createdAt: timestampToDate(data.createdAt),
-  };
+  return docId;
 }
 
 /**

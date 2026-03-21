@@ -135,7 +135,7 @@ const en = {
   shareSuccess: 'Successfully connected! You can now see their shared records.',
   shareAlreadyExists: 'You are already connected with this user.',
   shareSelfError: 'You cannot share with yourself.',
-  shareInvalidQR: 'Invalid QR code. Please scan a valid Price Tracker QR code.',
+  shareInvalidQR: 'Invalid QR code. Please scan a valid QR code from the app.',
   shareError: 'Failed to connect. Please try again.',
   startScanner: 'Start Scanner',
   stopScanner: 'Stop Scanner',
