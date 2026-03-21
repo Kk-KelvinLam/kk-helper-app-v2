@@ -47,6 +47,34 @@ export interface ShareRecord {
   createdAt: Date;
 }
 
+export interface BloodPressureRecord {
+  id: string;
+  userId: string;
+  systolic: number;
+  diastolic: number;
+  heartRate: number;
+  measuredAt: Date;
+  arm: 'left' | 'right';
+  position: 'sitting' | 'standing' | 'lying';
+  notes: string;
+  imageUrl: string;
+  isShared: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface BloodPressureFormData {
+  systolic: string;
+  diastolic: string;
+  heartRate: string;
+  arm: 'left' | 'right';
+  position: 'sitting' | 'standing' | 'lying';
+  notes: string;
+  imageUrl: string;
+}
+
+export type BPCategory = 'normal' | 'elevated' | 'hypertension1' | 'hypertension2' | 'crisis';
+
 export const CATEGORIES = [
   '🥬 蔬菜 Vegetables',
   '🍎 水果 Fruits',

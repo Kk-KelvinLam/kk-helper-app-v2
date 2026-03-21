@@ -3,12 +3,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { languageNames, type Language } from '@/i18n';
-import { ShoppingBag, TrendingUp, Calculator, LogOut, User, Moon, Sun, Globe, Settings, X, UserCircle } from 'lucide-react';
+import { ShoppingBag, TrendingUp, Calculator, LogOut, User, Moon, Sun, Globe, Settings, X, UserCircle, Heart } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
-  currentPage: 'records' | 'market' | 'calculator' | 'profile';
-  onNavigate: (page: 'records' | 'market' | 'calculator' | 'profile') => void;
+  currentPage: 'records' | 'market' | 'calculator' | 'bloodPressure' | 'profile';
+  onNavigate: (page: 'records' | 'market' | 'calculator' | 'bloodPressure' | 'profile') => void;
 }
 
 export default function Layout({ children, currentPage, onNavigate }: LayoutProps) {
@@ -23,10 +23,10 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
       <header className={`border-b sticky top-0 z-30 ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-2xl">🛒</span>
+            <span className="text-2xl">🏠</span>
             <div>
-              <h1 className={`text-lg font-bold leading-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>格價助手</h1>
-              <p className={`text-xs leading-tight ${isDark ? 'text-gray-400' : 'text-gray-400'}`}>Price Tracker</p>
+              <h1 className={`text-lg font-bold leading-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>{t('appName')}</h1>
+              <p className={`text-xs leading-tight ${isDark ? 'text-gray-400' : 'text-gray-400'}`}>{t('appSubtitle')}</p>
             </div>
           </div>
 
@@ -106,6 +106,17 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
           >
             <Calculator className="w-5 h-5" />
             <span className="text-xs font-medium">{t('navCalculator')}</span>
+          </button>
+          <button
+            onClick={() => onNavigate('bloodPressure')}
+            className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${
+              currentPage === 'bloodPressure'
+                ? 'text-indigo-600 dark:text-indigo-400'
+                : isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
+            }`}
+          >
+            <Heart className="w-5 h-5" />
+            <span className="text-xs font-medium">{t('navBP')}</span>
           </button>
           <button
             onClick={() => onNavigate('profile')}
