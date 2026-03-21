@@ -289,7 +289,7 @@ export default function BloodPressurePage() {
           <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{t('bpTitle')}</h1>
           <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
             {t('bpSubtitle')}
-            {records.length > 0 && ` · ${t('bpRecordsSaved', { count: filteredRecords.length })}`}
+            {filteredRecords.length > 0 && ` · ${t('bpRecordsSaved', { count: filteredRecords.length })}`}
           </p>
         </div>
         <button
