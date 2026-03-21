@@ -344,13 +344,13 @@ export function parseBPText(text: string): ParsedBPData {
   }
 
   // Extract all 2-3 digit numbers in valid physiological ranges.
-  // Negative lookbehind/lookahead prevents matching partial numbers
-  // (e.g. avoids extracting '20' from '2024').
+  // Use a non-digit boundary to avoid matching partial numbers
+  // (e.g. avoids extracting '20' from '2024') without relying on lookbehind.
   const allNumbers: number[] = [];
-  const numRegex = /(?<!\d)(\d{2,3})(?!\d)/g;
-  let m;
+  const numRegex = /(^|[^\d])(\d{2,3})(?!\d)/g;
+  let m: RegExpExecArray | null;
   while ((m = numRegex.exec(normalized)) !== null) {
-    const n = parseInt(m[1]);
+    const n = parseInt(m[2]);
     if (n >= 30 && n <= 250) {
       allNumbers.push(n);
     }
