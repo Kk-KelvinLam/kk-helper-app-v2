@@ -146,6 +146,9 @@ const zhTW = {
 
   // Categories
   allCategories: '全部',
+  me: '我',
+  sharedBy: '由 {name} 分享',
+  allUsers: '全部',
 } as const;
 
 export default zhTW;

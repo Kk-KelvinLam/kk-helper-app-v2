@@ -1,7 +1,7 @@
 import type { PurchaseRecord } from '@/types';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { MapPin, Tag, Pencil, Trash2 } from 'lucide-react';
+import { MapPin, Tag, Pencil, Trash2, User } from 'lucide-react';
 
 interface PurchaseCardProps {
   purchase: PurchaseRecord;
@@ -40,6 +40,12 @@ export default function PurchaseCard({ purchase, onEdit, onDelete, readOnly }: P
               <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
               <span className="truncate">{purchase.location}</span>
             </div>
+            {purchase.ownerDisplayName && (
+              <div className={`flex items-center gap-1.5 text-xs ${isDark ? 'text-indigo-400' : 'text-indigo-500'}`}>
+                <User className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="truncate">{t('sharedBy', { name: purchase.ownerDisplayName })}</span>
+              </div>
+            )}
           </div>
         </div>
         <div className="text-right ml-3">

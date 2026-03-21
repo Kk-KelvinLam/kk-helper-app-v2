@@ -3,7 +3,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getUserPurchases, deletePurchase } from '@/lib/purchases';
-import type { PurchaseRecord } from '@/types';
+import { getSharedWithMe } from '@/lib/sharing';
+import type { PurchaseRecord, ShareRecord } from '@/types';
 import AddRecordModal from '@/components/AddRecordModal';
 import PurchaseCard from '@/components/PurchaseCard';
 import EditRecordModal from '@/components/EditRecordModal';
@@ -14,19 +15,41 @@ export default function RecordsPage() {
   const { t } = useLanguage();
   const { isDark } = useTheme();
   const [purchases, setPurchases] = useState<PurchaseRecord[]>([]);
+  const [sharedWithMe, setSharedWithMe] = useState<ShareRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingRecord, setEditingRecord] = useState<PurchaseRecord | null>(null);
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
 
   const loadPurchases = async () => {
     if (!user) return;
     setLoading(true);
     setFetchError(null);
     try {
-      const data = await getUserPurchases(user.uid);
-      setPurchases(data);
+      const [ownData, sharedUsers] = await Promise.all([
+        getUserPurchases(user.uid),
+        getSharedWithMe(user.uid),
+      ]);
+      setSharedWithMe(sharedUsers);
+
+      const sharedRecordsArrays = await Promise.all(
+        sharedUsers.map(async (share) => {
+          const records = await getUserPurchases(share.ownerUserId);
+          return records.map((r) => ({
+            ...r,
+            ownerDisplayName: share.ownerDisplayName || share.ownerEmail,
+          }));
+        })
+      );
+
+      const allRecords = [
+        ...ownData,
+        ...sharedRecordsArrays.flat(),
+      ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+      setPurchases(allRecords);
     } catch (error) {
       console.error('Error loading purchases:', error);
       setFetchError(t('loadError'));
@@ -50,7 +73,26 @@ export default function RecordsPage() {
     }
   };
 
+  const toggleUserFilter = (userId: string) => {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) {
+        next.delete(userId);
+      } else {
+        next.add(userId);
+      }
+      return next;
+    });
+  };
+
   const filteredPurchases = purchases.filter((p) => {
+    if (selectedUserIds.size > 0) {
+      // p.userId is always the record owner's ID (whether it's the current user's own record
+      // or a shared record loaded from another user's collection).
+      const isOwn = !p.ownerDisplayName;
+      if (isOwn && !selectedUserIds.has(user!.uid)) return false;
+      if (!isOwn && !selectedUserIds.has(p.userId)) return false;
+    }
     const lower = searchTerm.toLowerCase();
     return (
       p.itemName.toLowerCase().includes(lower) ||
@@ -94,6 +136,51 @@ export default function RecordsPage() {
         />
       </div>
 
+      {/* User Filter Chips */}
+      {sharedWithMe.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setSelectedUserIds(new Set())}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              selectedUserIds.size === 0
+                ? 'bg-indigo-600 text-white'
+                : isDark
+                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            {t('allUsers')}
+          </button>
+          <button
+            onClick={() => toggleUserFilter(user!.uid)}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              selectedUserIds.has(user!.uid)
+                ? 'bg-indigo-600 text-white'
+                : isDark
+                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            {t('me')}
+          </button>
+          {sharedWithMe.map((share) => (
+            <button
+              key={share.id}
+              onClick={() => toggleUserFilter(share.ownerUserId)}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                selectedUserIds.has(share.ownerUserId)
+                  ? 'bg-indigo-600 text-white'
+                  : isDark
+                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {share.ownerDisplayName || share.ownerEmail}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Records List */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
@@ -127,8 +214,9 @@ export default function RecordsPage() {
             <PurchaseCard
               key={purchase.id}
               purchase={purchase}
-              onEdit={() => setEditingRecord(purchase)}
-              onDelete={() => handleDelete(purchase.id)}
+              onEdit={!purchase.ownerDisplayName ? () => setEditingRecord(purchase) : undefined}
+              onDelete={!purchase.ownerDisplayName ? () => handleDelete(purchase.id) : undefined}
+              readOnly={!!purchase.ownerDisplayName}
             />
           ))}
         </div>
