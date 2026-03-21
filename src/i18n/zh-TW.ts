@@ -144,6 +144,15 @@ const zhTW = {
   sharedRecordsFrom: '{name} 的紀錄',
   backToProfile: '返回',
 
+  // Profile settings
+  profileGender: '性別',
+  genderMale: '男性',
+  genderFemale: '女性',
+  genderUnspecified: '未設定',
+  profileSaved: '個人資料已儲存',
+  profileSaveError: '儲存個人資料失敗，請重試。',
+  profileSettings: '個人設定',
+
   // Blood Pressure
   navBP: '血壓',
   bpTitle: '血壓紀錄',
@@ -170,6 +179,8 @@ const zhTW = {
   bpNormalRange: '正常值範圍參考',
   bpNormal: '正常',
   bpNormalDesc: '<120 / <80 mmHg',
+  bpNormalDescMale: '理想值：~120 / ~80 mmHg',
+  bpNormalDescFemale: '理想值：~110 / ~75 mmHg',
   bpElevated: '偏高',
   bpElevatedDesc: '120-129 / <80 mmHg',
   bpHypertension1: '高血壓第一期',
@@ -178,6 +189,7 @@ const zhTW = {
   bpHypertension2Desc: '≥140 / ≥90 mmHg',
   bpCrisis: '高血壓危象',
   bpCrisisDesc: '>180 / >120 mmHg',
+  bpGenderNote: '參考值以{gender}為準。女性的正常血壓通常略低於男性。',
   bpHistory: '歷史圖表',
   bpAnalysis: '血壓分析',
   bpAverage: '平均值',

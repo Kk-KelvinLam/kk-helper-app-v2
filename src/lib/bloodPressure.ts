@@ -11,7 +11,7 @@ import {
   type Timestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { BloodPressureRecord, BloodPressureFormData, BPCategory } from '@/types';
+import type { BloodPressureRecord, BloodPressureFormData, BPCategory, Gender } from '@/types';
 
 const COLLECTION_NAME = 'bloodPressureRecords';
 
@@ -145,6 +145,18 @@ export function getBPCategoryColor(category: BPCategory): string {
     case 'hypertension1': return '#f97316';
     case 'hypertension2': return '#ef4444';
     case 'crisis': return '#dc2626';
+  }
+}
+
+/**
+ * Get gender-specific BP normal description key.
+ * Returns the appropriate i18n key based on gender.
+ */
+export function getBPNormalDescKey(gender: Gender): 'bpNormalDescMale' | 'bpNormalDescFemale' | 'bpNormalDesc' {
+  switch (gender) {
+    case 'male': return 'bpNormalDescMale';
+    case 'female': return 'bpNormalDescFemale';
+    default: return 'bpNormalDesc';
   }
 }
 

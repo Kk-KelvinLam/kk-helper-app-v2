@@ -75,6 +75,14 @@ export interface BloodPressureFormData {
 
 export type BPCategory = 'normal' | 'elevated' | 'hypertension1' | 'hypertension2' | 'crisis';
 
+export type Gender = 'male' | 'female' | 'unspecified';
+
+export interface UserProfile {
+  userId: string;
+  gender: Gender;
+  updatedAt: Date;
+}
+
 export const CATEGORIES = [
   '🥬 蔬菜 Vegetables',
   '🍎 水果 Fruits',
