@@ -33,10 +33,12 @@ function BPHistoryChart({
   records,
   isDark,
   t,
+  locale,
 }: {
   records: BloodPressureRecord[];
   isDark: boolean;
   t: (key: TranslationKeys, params?: Record<string, string | number>) => string;
+  locale: string;
 }) {
   if (records.length < 2) return null;
 
@@ -107,7 +109,7 @@ function BPHistoryChart({
           return (
             <text key={`label-${i}`} x={x} y={chartHeight - 5} textAnchor="middle"
               fill={isDark ? '#9ca3af' : '#9ca3af'} fontSize="6">
-              {r.measuredAt.toLocaleDateString('zh-HK', { month: 'numeric', day: 'numeric' })}
+              {r.measuredAt.toLocaleDateString(locale, { month: 'numeric', day: 'numeric' })}
             </text>
           );
         })}
@@ -128,7 +130,7 @@ function BPHistoryChart({
 
 export default function BloodPressurePage() {
   const { user } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { isDark } = useTheme();
 
   const [records, setRecords] = useState<BloodPressureRecord[]>([]);
@@ -345,7 +347,7 @@ export default function BloodPressurePage() {
               {t('bpTapAdd')}
             </p>
           ) : (
-            <BPHistoryChart records={records} isDark={isDark} t={t} />
+            <BPHistoryChart records={records} isDark={isDark} t={t} locale={language} />
           )}
         </div>
       )}
@@ -562,7 +564,7 @@ export default function BloodPressurePage() {
                 </div>
 
                 <div className={`text-xs mt-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                  {record.measuredAt.toLocaleString('zh-HK', {
+                  {record.measuredAt.toLocaleString(language, {
                     year: 'numeric', month: 'short', day: 'numeric',
                     hour: '2-digit', minute: '2-digit',
                   })}
