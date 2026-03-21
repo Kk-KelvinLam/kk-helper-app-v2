@@ -220,15 +220,19 @@ export default function BloodPressurePage() {
   };
 
   const handleBPTextExtracted = (text: string) => {
-    const parsed = parseBPText(text);
-    setFormData((prev) => ({
-      ...prev,
-      systolic: parsed.systolic || prev.systolic,
-      diastolic: parsed.diastolic || prev.diastolic,
-      heartRate: parsed.heartRate || prev.heartRate,
-    }));
-    if (parsed.systolic || parsed.diastolic || parsed.heartRate) {
-      setOcrFilled(true);
+    try {
+      const parsed = parseBPText(text);
+      setFormData((prev) => ({
+        ...prev,
+        systolic: parsed.systolic || prev.systolic,
+        diastolic: parsed.diastolic || prev.diastolic,
+        heartRate: parsed.heartRate || prev.heartRate,
+      }));
+      if (parsed.systolic || parsed.diastolic || parsed.heartRate) {
+        setOcrFilled(true);
+      }
+    } catch (err) {
+      console.error('Error parsing BP text:', err);
     }
     setShowCamera(false);
   };
@@ -814,7 +818,7 @@ export default function BloodPressurePage() {
               {/* Scan BP Monitor */}
               <button
                 type="button"
-                onClick={() => setShowCamera(true)}
+                onClick={() => { setOcrFilled(false); setShowCamera(true); }}
                 className={`w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-dashed transition-colors ${
                   isDark
                     ? 'border-gray-600 text-gray-400 hover:border-indigo-500 hover:text-indigo-400 hover:bg-indigo-900/20'
