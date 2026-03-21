@@ -12,6 +12,7 @@ import {
   analyzeBPRecords,
 } from '@/lib/bloodPressure';
 import type { BloodPressureRecord, BloodPressureFormData, BPCategory } from '@/types';
+import type { TranslationKeys } from '@/i18n';
 import {
   Plus,
   Heart,
@@ -35,7 +36,7 @@ function BPHistoryChart({
 }: {
   records: BloodPressureRecord[];
   isDark: boolean;
-  t: (key: string, params?: Record<string, string | number>) => string;
+  t: (key: TranslationKeys, params?: Record<string, string | number>) => string;
 }) {
   if (records.length < 2) return null;
 
