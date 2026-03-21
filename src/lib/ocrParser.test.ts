@@ -7,6 +7,7 @@ import {
   extractItemName,
   parseReceiptText,
   parsePriceTagText,
+  parseBPText,
 } from '@/lib/ocrParser';
 
 describe('ocrParser', () => {
@@ -242,6 +243,129 @@ describe('ocrParser', () => {
       expect(result.name).toBe('');
       expect(result.price).toBe('');
       expect(result.quantity).toBe('');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  describe('parseBPText', () => {
+    it('extracts from SYS/DIA/PUL labels', () => {
+      expect(parseBPText('SYS 120 DIA 80 PUL 72')).toEqual({
+        systolic: '120', diastolic: '80', heartRate: '72',
+      });
+    });
+
+    it('extracts from SYS./DIA./PUL. labels with dots', () => {
+      expect(parseBPText('SYS. 135\nDIA. 85\nPUL. 68')).toEqual({
+        systolic: '135', diastolic: '85', heartRate: '68',
+      });
+    });
+
+    it('extracts from SYSTOLIC/DIASTOLIC labels', () => {
+      expect(parseBPText('Systolic: 118\nDiastolic: 78\nPulse: 65')).toEqual({
+        systolic: '118', diastolic: '78', heartRate: '65',
+      });
+    });
+
+    it('extracts from HR label', () => {
+      expect(parseBPText('SYS 120 DIA 80 HR 72')).toEqual({
+        systolic: '120', diastolic: '80', heartRate: '72',
+      });
+    });
+
+    it('extracts with BPM suffix when labels present', () => {
+      expect(parseBPText('SYS 120 DIA 80 72BPM')).toEqual({
+        systolic: '120', diastolic: '80', heartRate: '72',
+      });
+    });
+
+    it('extracts from slash format "120/80"', () => {
+      expect(parseBPText('120/80')).toEqual({
+        systolic: '120', diastolic: '80', heartRate: '',
+      });
+    });
+
+    it('extracts from slash format with spaces', () => {
+      expect(parseBPText('120 / 80')).toEqual({
+        systolic: '120', diastolic: '80', heartRate: '',
+      });
+    });
+
+    it('extracts from slash format with BPM', () => {
+      expect(parseBPText('120/80 72BPM')).toEqual({
+        systolic: '120', diastolic: '80', heartRate: '72',
+      });
+    });
+
+    it('extracts from slash format with full-width slash', () => {
+      expect(parseBPText('135／88')).toEqual({
+        systolic: '135', diastolic: '88', heartRate: '',
+      });
+    });
+
+    it('extracts Chinese labels (收縮壓/舒張壓/脈搏)', () => {
+      expect(parseBPText('收縮壓 120 舒張壓 80 脈搏 72')).toEqual({
+        systolic: '120', diastolic: '80', heartRate: '72',
+      });
+    });
+
+    it('extracts Chinese casual labels (上壓/下壓/心跳)', () => {
+      expect(parseBPText('上壓 120\n下壓 80\n心跳 72')).toEqual({
+        systolic: '120', diastolic: '80', heartRate: '72',
+      });
+    });
+
+    it('extracts from three standalone numbers', () => {
+      expect(parseBPText('120\n80\n72')).toEqual({
+        systolic: '120', diastolic: '80', heartRate: '72',
+      });
+    });
+
+    it('extracts from three numbers in any order', () => {
+      expect(parseBPText('72\n120\n80')).toEqual({
+        systolic: '120', diastolic: '80', heartRate: '72',
+      });
+    });
+
+    it('extracts with mmHg and BPM suffixes', () => {
+      expect(parseBPText('120 mmHg\n80 mmHg\n72 BPM')).toEqual({
+        systolic: '120', diastolic: '80', heartRate: '72',
+      });
+    });
+
+    it('extracts systolic and diastolic only when two numbers found', () => {
+      expect(parseBPText('130\n85')).toEqual({
+        systolic: '130', diastolic: '85', heartRate: '',
+      });
+    });
+
+    it('returns empty strings when no BP data found', () => {
+      expect(parseBPText('no numbers here')).toEqual({
+        systolic: '', diastolic: '', heartRate: '',
+      });
+    });
+
+    it('returns empty strings for empty input', () => {
+      expect(parseBPText('')).toEqual({
+        systolic: '', diastolic: '', heartRate: '',
+      });
+    });
+
+    it('ignores date-like patterns (e.g. 2024/01/15)', () => {
+      const result = parseBPText('2024/01/15\n120\n80\n72');
+      expect(result.systolic).toBe('120');
+      expect(result.diastolic).toBe('80');
+    });
+
+    it('handles high blood pressure readings', () => {
+      expect(parseBPText('SYS 180 DIA 110 PUL 95')).toEqual({
+        systolic: '180', diastolic: '110', heartRate: '95',
+      });
+    });
+
+    it('handles PR label for pulse rate', () => {
+      expect(parseBPText('SYS 125\nDIA 82\nPR 70')).toEqual({
+        systolic: '125', diastolic: '82', heartRate: '70',
+      });
     });
   });
 });

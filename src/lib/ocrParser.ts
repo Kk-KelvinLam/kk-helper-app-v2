@@ -1,8 +1,13 @@
 /**
- * OCR text parser for receipts and price tags.
- * Extracts structured data (item name, price, quantity, unit, location, category)
- * from raw OCR text produced by Tesseract.js on images of HK receipts / price tags.
+ * OCR text parser for receipts, price tags, and blood pressure monitors.
+ * Extracts structured data from raw OCR text produced by Tesseract.js.
  */
+
+export interface ParsedBPData {
+  systolic: string;
+  diastolic: string;
+  heartRate: string;
+}
 
 export interface ParsedReceiptData {
   itemName: string;
@@ -254,4 +259,129 @@ export function parsePriceTagText(text: string): ParsedPriceTagData {
     quantity,
     unit,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Blood pressure text parsing
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse OCR text from a blood pressure monitor display and extract
+ * systolic, diastolic, and heart rate values.
+ *
+ * Handles common BP monitor display formats:
+ * - Labeled (English): "SYS 120 DIA 80 PUL 72", "SYS. 135 DIA. 85 PUL. 68"
+ * - Labeled (Chinese): "收縮壓 120 舒張壓 80 脈搏 72", "上壓 120 下壓 80 心跳 72"
+ * - Slash format: "120/80", "120/80 72BPM"
+ * - Numbers only: Three standalone numbers from a monitor display
+ */
+export function parseBPText(text: string): ParsedBPData {
+  const result: ParsedBPData = { systolic: '', diastolic: '', heartRate: '' };
+  const normalized = text.replace(/\r\n/g, '\n').trim();
+  if (!normalized) return result;
+
+  // --- Strategy 1: Labeled patterns (most reliable) ---
+  const sysMatch = normalized.match(
+    /(?:SYS(?:TOLIC)?|上壓|收縮壓?|收縮)[.:\s]*(\d{2,3})/i,
+  );
+  const diaMatch = normalized.match(
+    /(?:DIA(?:STOLIC)?|下壓|舒張壓?|舒張)[.:\s]*(\d{2,3})/i,
+  );
+  const pulMatch = normalized.match(
+    /(?:PUL(?:SE)?|HR|HEART\s*RATE|PR|脈搏|心跳|脈率)[.:\s]*(\d{2,3})/i,
+  );
+
+  if (sysMatch) result.systolic = sysMatch[1];
+  if (diaMatch) result.diastolic = diaMatch[1];
+  if (pulMatch) result.heartRate = pulMatch[1];
+
+  if (result.systolic && result.diastolic) {
+    if (!result.heartRate) {
+      const bpmMatch = normalized.match(/(\d{2,3})\s*BPM/i);
+      if (bpmMatch) result.heartRate = bpmMatch[1];
+    }
+    return result;
+  }
+
+  // --- Strategy 2: Slash format "120/80" ---
+  const slashMatch = normalized.match(/(\d{2,3})\s*[/／]\s*(\d{2,3})/);
+  if (slashMatch) {
+    const sys = parseInt(slashMatch[1]);
+    const dia = parseInt(slashMatch[2]);
+    if (sys >= 70 && sys <= 250 && dia >= 40 && dia <= 150 && sys > dia) {
+      result.systolic = slashMatch[1];
+      result.diastolic = slashMatch[2];
+
+      if (!result.heartRate) {
+        const bpmMatch = normalized.match(/(\d{2,3})\s*BPM/i);
+        if (
+          bpmMatch &&
+          bpmMatch[1] !== result.systolic &&
+          bpmMatch[1] !== result.diastolic
+        ) {
+          result.heartRate = bpmMatch[1];
+        }
+      }
+      if (!result.heartRate) {
+        const pulMatch2 = normalized.match(
+          /(?:PUL(?:SE)?|HR|PR|脈搏|心跳|脈率)[.:\s]*(\d{2,3})/i,
+        );
+        if (pulMatch2) result.heartRate = pulMatch2[1];
+      }
+      return result;
+    }
+  }
+
+  // --- Strategy 3: Number extraction (for BP monitor screens with just numbers) ---
+  // Check for BPM-tagged heart rate first
+  const bpmMatch = normalized.match(/(\d{2,3})\s*BPM/i);
+  if (bpmMatch) {
+    result.heartRate = bpmMatch[1];
+  }
+
+  // Extract all 2-3 digit numbers in valid physiological ranges
+  const allNumbers: number[] = [];
+  const numRegex = /(?<!\d)(\d{2,3})(?!\d)/g;
+  let m;
+  while ((m = numRegex.exec(normalized)) !== null) {
+    const n = parseInt(m[1]);
+    if (n >= 30 && n <= 250) {
+      allNumbers.push(n);
+    }
+  }
+
+  // Remove heart rate value from pool if already identified via BPM label
+  const pool = [...allNumbers];
+  if (result.heartRate) {
+    const hrVal = parseInt(result.heartRate);
+    const idx = pool.indexOf(hrVal);
+    if (idx >= 0) pool.splice(idx, 1);
+  }
+
+  const unique = [...new Set(pool)];
+
+  if (unique.length >= 2) {
+    // Sort descending: systolic is typically the highest number
+    const sorted = [...unique].sort((a, b) => b - a);
+    if (
+      sorted[0] >= 70 &&
+      sorted[0] <= 250 &&
+      sorted[1] >= 40 &&
+      sorted[1] <= 150 &&
+      sorted[0] > sorted[1]
+    ) {
+      result.systolic = String(sorted[0]);
+      result.diastolic = String(sorted[1]);
+      if (
+        !result.heartRate &&
+        sorted.length >= 3 &&
+        sorted[2] >= 30 &&
+        sorted[2] <= 200
+      ) {
+        result.heartRate = String(sorted[2]);
+      }
+    }
+  }
+
+  return result;
 }

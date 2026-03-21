@@ -12,6 +12,8 @@ import {
   getBPNormalDescKey,
 } from '@/lib/bloodPressure';
 import { getSharedWithMe } from '@/lib/sharing';
+import { parseBPText } from '@/lib/ocrParser';
+import CameraCapture from '@/components/CameraCapture';
 import type { BloodPressureRecord, BloodPressureFormData, BPCategory, Gender, ShareRecord } from '@/types';
 import type { TranslationKeys } from '@/i18n';
 import { getUserProfile } from '@/lib/userProfile';
@@ -28,6 +30,7 @@ import {
   Loader2,
   Eye,
   AlertCircle,
+  CheckCircle2,
 } from 'lucide-react';
 
 function BPHistoryChart({
@@ -146,6 +149,8 @@ export default function BloodPressurePage() {
   const [saving, setSaving] = useState(false);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
   const [userGender, setUserGender] = useState<Gender>('unspecified');
+  const [showCamera, setShowCamera] = useState(false);
+  const [ocrFilled, setOcrFilled] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState<BloodPressureFormData>({
@@ -211,6 +216,21 @@ export default function BloodPressurePage() {
       notes: '',
       imageUrl: '',
     });
+    setOcrFilled(false);
+  };
+
+  const handleBPTextExtracted = (text: string) => {
+    const parsed = parseBPText(text);
+    setFormData((prev) => ({
+      ...prev,
+      systolic: parsed.systolic || prev.systolic,
+      diastolic: parsed.diastolic || prev.diastolic,
+      heartRate: parsed.heartRate || prev.heartRate,
+    }));
+    if (parsed.systolic || parsed.diastolic || parsed.heartRate) {
+      setOcrFilled(true);
+    }
+    setShowCamera(false);
   };
 
   const handleSave = async () => {
@@ -783,6 +803,28 @@ export default function BloodPressurePage() {
                 />
               </div>
 
+              {/* OCR fill confirmation */}
+              {ocrFilled && (
+                <div className={`flex items-center gap-2 text-sm p-3 rounded-lg ${isDark ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-green-700'}`}>
+                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                  {t('ocrFieldsFilled')}
+                </div>
+              )}
+
+              {/* Scan BP Monitor */}
+              <button
+                type="button"
+                onClick={() => setShowCamera(true)}
+                className={`w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-dashed transition-colors ${
+                  isDark
+                    ? 'border-gray-600 text-gray-400 hover:border-indigo-500 hover:text-indigo-400 hover:bg-indigo-900/20'
+                    : 'border-gray-300 text-gray-500 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50'
+                }`}
+              >
+                <Camera className="w-5 h-5" />
+                {t('bpScanReading')}
+              </button>
+
               {/* Live Preview */}
               {formData.systolic && formData.diastolic && (
                 <div className={`p-3 rounded-xl ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
@@ -831,6 +873,16 @@ export default function BloodPressurePage() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Camera Capture for BP */}
+      {showCamera && (
+        <CameraCapture
+          onTextExtracted={handleBPTextExtracted}
+          onClose={() => setShowCamera(false)}
+          title={t('bpScanReading')}
+          hint={t('bpCaptureHint')}
+        />
       )}
     </div>
   );
