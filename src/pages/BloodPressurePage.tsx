@@ -10,9 +10,11 @@ import {
   classifyBP,
   getBPCategoryColor,
   analyzeBPRecords,
+  getBPNormalDescKey,
 } from '@/lib/bloodPressure';
-import type { BloodPressureRecord, BloodPressureFormData, BPCategory } from '@/types';
+import type { BloodPressureRecord, BloodPressureFormData, BPCategory, Gender } from '@/types';
 import type { TranslationKeys } from '@/i18n';
+import { getUserProfile } from '@/lib/userProfile';
 import {
   Plus,
   Heart,
@@ -143,6 +145,7 @@ export default function BloodPressurePage() {
   const [showManageSharing, setShowManageSharing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
+  const [userGender, setUserGender] = useState<Gender>('unspecified');
 
   // Form state
   const [formData, setFormData] = useState<BloodPressureFormData>({
@@ -162,8 +165,12 @@ export default function BloodPressurePage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await getUserBPRecords(user.uid);
+      const [data, profile] = await Promise.all([
+        getUserBPRecords(user.uid),
+        getUserProfile(user.uid),
+      ]);
       setRecords(data);
+      if (profile) setUserGender(profile.gender);
     } catch (err) {
       console.error('Error loading BP records:', err);
       setError(t('bpLoadError'));
@@ -320,7 +327,7 @@ export default function BloodPressurePage() {
           <h3 className={`font-semibold mb-3 ${isDark ? 'text-white' : 'text-gray-900'}`}>{t('bpNormalRange')}</h3>
           <div className="space-y-2">
             {([
-              { key: 'normal' as BPCategory, label: t('bpNormal'), desc: t('bpNormalDesc') },
+              { key: 'normal' as BPCategory, label: t('bpNormal'), desc: t(getBPNormalDescKey(userGender)) },
               { key: 'elevated' as BPCategory, label: t('bpElevated'), desc: t('bpElevatedDesc') },
               { key: 'hypertension1' as BPCategory, label: t('bpHypertension1'), desc: t('bpHypertension1Desc') },
               { key: 'hypertension2' as BPCategory, label: t('bpHypertension2'), desc: t('bpHypertension2Desc') },
@@ -335,6 +342,11 @@ export default function BloodPressurePage() {
               </div>
             ))}
           </div>
+          {userGender !== 'unspecified' && (
+            <p className={`text-xs mt-3 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+              {t('bpGenderNote', { gender: userGender === 'male' ? t('genderMale') : t('genderFemale') })}
+            </p>
+          )}
         </div>
       )}
 
@@ -526,9 +538,17 @@ export default function BloodPressurePage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
-                    {record.isShared && (
-                      <Share2 className="w-3.5 h-3.5 text-indigo-500" />
-                    )}
+                    <button
+                      onClick={() => handleToggleShare(record)}
+                      className={`p-1.5 rounded-lg transition-colors ${
+                        record.isShared
+                          ? 'text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30'
+                          : isDark ? 'text-gray-600 hover:bg-gray-700' : 'text-gray-300 hover:bg-gray-100'
+                      }`}
+                      title={record.isShared ? t('bpShared') : t('bpNotShared')}
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                    </button>
                     <button
                       onClick={() => handleDelete(record.id)}
                       className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-gray-700 text-gray-500' : 'hover:bg-gray-100 text-gray-400'}`}

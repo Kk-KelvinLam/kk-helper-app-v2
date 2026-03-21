@@ -12,10 +12,11 @@ import {
   getMySharedUsers,
   getSharedWithMe,
 } from '@/lib/sharing';
+import { getUserProfile, saveUserProfile } from '@/lib/userProfile';
 import { getUserPurchases } from '@/lib/purchases';
-import type { ShareRecord, PurchaseRecord } from '@/types';
+import type { ShareRecord, PurchaseRecord, Gender } from '@/types';
 import PurchaseCard from '@/components/PurchaseCard';
-import { QrCode, ScanLine, UserMinus, Users, ArrowLeft, Search, Package } from 'lucide-react';
+import { QrCode, ScanLine, UserMinus, Users, ArrowLeft, Search, Package, Settings } from 'lucide-react';
 
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -37,17 +38,21 @@ export default function ProfilePage() {
   const [sharedRecords, setSharedRecords] = useState<PurchaseRecord[]>([]);
   const [sharedRecordsLoading, setSharedRecordsLoading] = useState(false);
   const [sharedSearchTerm, setSharedSearchTerm] = useState('');
+  const [gender, setGender] = useState<Gender>('unspecified');
+  const [genderSaving, setGenderSaving] = useState(false);
 
   const loadShares = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     try {
-      const [mySharesList, sharedWithMeList] = await Promise.all([
+      const [mySharesList, sharedWithMeList, profile] = await Promise.all([
         getMySharedUsers(user.uid),
         getSharedWithMe(user.uid),
+        getUserProfile(user.uid),
       ]);
       setMyShares(mySharesList);
       setSharedWithMe(sharedWithMeList);
+      if (profile) setGender(profile.gender);
     } catch (error) {
       console.error('Error loading shares:', error);
     } finally {
@@ -163,6 +168,21 @@ export default function ProfilePage() {
       setSharedRecords([]);
     } finally {
       setSharedRecordsLoading(false);
+    }
+  };
+
+  const handleGenderChange = async (newGender: Gender) => {
+    if (!user) return;
+    setGender(newGender);
+    setGenderSaving(true);
+    try {
+      await saveUserProfile(user.uid, { gender: newGender });
+      setMessage({ type: 'success', text: t('profileSaved') });
+    } catch (error) {
+      console.error('Error saving gender:', error);
+      setMessage({ type: 'error', text: t('profileSaveError') });
+    } finally {
+      setGenderSaving(false);
     }
   };
 
@@ -291,6 +311,44 @@ export default function ProfilePage() {
           {message.text}
         </div>
       )}
+
+      {/* Personal Settings */}
+      <div className={`rounded-xl border p-6 ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
+        <div className="flex items-center gap-2 mb-4">
+          <Settings className={`w-5 h-5 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`} />
+          <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            {t('profileSettings')}
+          </h2>
+        </div>
+
+        <div>
+          <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+            {t('profileGender')}
+          </label>
+          <div className="flex gap-2">
+            {([
+              { value: 'male' as Gender, label: t('genderMale') },
+              { value: 'female' as Gender, label: t('genderFemale') },
+              { value: 'unspecified' as Gender, label: t('genderUnspecified') },
+            ]).map((option) => (
+              <button
+                key={option.value}
+                onClick={() => handleGenderChange(option.value)}
+                disabled={genderSaving}
+                className={`flex-1 py-2 px-3 rounded-xl text-sm font-medium transition-colors ${
+                  gender === option.value
+                    ? 'bg-indigo-600 text-white'
+                    : isDark
+                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
+                      : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
 
       {/* My QR Code */}
       <div className={`rounded-xl border p-6 ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>

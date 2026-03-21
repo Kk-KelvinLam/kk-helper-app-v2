@@ -144,6 +144,15 @@ const en = {
   sharedRecordsFrom: 'Records from {name}',
   backToProfile: 'Back',
 
+  // Profile settings
+  profileGender: 'Gender',
+  genderMale: 'Male',
+  genderFemale: 'Female',
+  genderUnspecified: 'Not specified',
+  profileSaved: 'Profile saved',
+  profileSaveError: 'Failed to save profile. Please try again.',
+  profileSettings: 'Personal Settings',
+
   // Blood Pressure
   navBP: 'BP',
   bpTitle: 'Blood Pressure',
@@ -170,6 +179,8 @@ const en = {
   bpNormalRange: 'Normal Range Reference',
   bpNormal: 'Normal',
   bpNormalDesc: '<120 / <80 mmHg',
+  bpNormalDescMale: 'Ideal: ~120 / ~80 mmHg',
+  bpNormalDescFemale: 'Ideal: ~110 / ~75 mmHg',
   bpElevated: 'Elevated',
   bpElevatedDesc: '120-129 / <80 mmHg',
   bpHypertension1: 'High BP Stage 1',
@@ -178,6 +189,7 @@ const en = {
   bpHypertension2Desc: '≥140 / ≥90 mmHg',
   bpCrisis: 'Hypertensive Crisis',
   bpCrisisDesc: '>180 / >120 mmHg',
+  bpGenderNote: 'Reference values shown for {gender}. Women typically have slightly lower normal BP than men.',
   bpHistory: 'History Chart',
   bpAnalysis: 'Analysis',
   bpAverage: 'Average',

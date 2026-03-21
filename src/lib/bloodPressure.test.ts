@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyBP, getBPCategoryColor, analyzeBPRecords } from './bloodPressure';
+import { classifyBP, getBPCategoryColor, analyzeBPRecords, getBPNormalDescKey } from './bloodPressure';
 import type { BloodPressureRecord } from '@/types';
 
 describe('bloodPressure', () => {
@@ -122,6 +122,20 @@ describe('bloodPressure', () => {
       expect(result).not.toBeNull();
       expect(result!.categoryCount.normal).toBe(1);
       expect(result!.categoryCount.hypertension2).toBe(1);
+    });
+  });
+
+  describe('getBPNormalDescKey', () => {
+    it('returns male-specific key for male gender', () => {
+      expect(getBPNormalDescKey('male')).toBe('bpNormalDescMale');
+    });
+
+    it('returns female-specific key for female gender', () => {
+      expect(getBPNormalDescKey('female')).toBe('bpNormalDescFemale');
+    });
+
+    it('returns generic key for unspecified gender', () => {
+      expect(getBPNormalDescKey('unspecified')).toBe('bpNormalDesc');
     });
   });
 });
