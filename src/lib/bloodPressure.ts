@@ -35,7 +35,6 @@ export async function addBPRecord(
     position: data.position,
     notes: data.notes,
     imageUrl: data.imageUrl,
-    isShared: false,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -44,7 +43,7 @@ export async function addBPRecord(
 
 export async function updateBPRecord(
   id: string,
-  data: Partial<BloodPressureFormData & { isShared: boolean }>
+  data: Partial<BloodPressureFormData>
 ): Promise<void> {
   const docRef = doc(db, COLLECTION_NAME, id);
   const updateData: Record<string, unknown> = { updatedAt: serverTimestamp() };
@@ -55,7 +54,6 @@ export async function updateBPRecord(
   if (data.position !== undefined) updateData.position = data.position;
   if (data.notes !== undefined) updateData.notes = data.notes;
   if (data.imageUrl !== undefined) updateData.imageUrl = data.imageUrl;
-  if (data.isShared !== undefined) updateData.isShared = data.isShared;
   await updateDoc(docRef, updateData);
 }
 
@@ -85,38 +83,6 @@ export async function getUserBPRecords(
       position: data.position || 'sitting',
       notes: data.notes || '',
       imageUrl: data.imageUrl || '',
-      isShared: data.isShared ?? false,
-      createdAt: timestampToDate(data.createdAt),
-      updatedAt: timestampToDate(data.updatedAt),
-    } as BloodPressureRecord;
-  });
-  return records.sort((a, b) => b.measuredAt.getTime() - a.measuredAt.getTime());
-}
-
-export async function getSharedBPRecords(
-  userId: string
-): Promise<BloodPressureRecord[]> {
-  const q = query(
-    collection(db, COLLECTION_NAME),
-    where('userId', '==', userId),
-    where('isShared', '==', true)
-  );
-
-  const querySnapshot = await getDocs(q);
-  const records = querySnapshot.docs.map((docSnap) => {
-    const data = docSnap.data();
-    return {
-      id: docSnap.id,
-      userId: data.userId,
-      systolic: data.systolic,
-      diastolic: data.diastolic,
-      heartRate: data.heartRate,
-      measuredAt: timestampToDate(data.measuredAt),
-      arm: data.arm || 'left',
-      position: data.position || 'sitting',
-      notes: data.notes || '',
-      imageUrl: data.imageUrl || '',
-      isShared: data.isShared ?? false,
       createdAt: timestampToDate(data.createdAt),
       updatedAt: timestampToDate(data.updatedAt),
     } as BloodPressureRecord;

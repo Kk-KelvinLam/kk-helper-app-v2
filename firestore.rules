@@ -14,13 +14,13 @@ service cloud.firestore {
     }
 
     // Blood pressure records - users can modify only their own records
-    // Read is allowed for the owner or users with a share relationship (only shared records)
+    // Read is allowed for the owner or users with a share relationship
     match /bloodPressureRecords/{recordId} {
       allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
       allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
       allow read: if request.auth != null && (
         request.auth.uid == resource.data.userId ||
-        (resource.data.isShared == true && exists(/databases/$(database)/documents/shares/$(resource.data.userId + '_' + request.auth.uid)))
+        exists(/databases/$(database)/documents/shares/$(resource.data.userId + '_' + request.auth.uid))
       );
     }
 

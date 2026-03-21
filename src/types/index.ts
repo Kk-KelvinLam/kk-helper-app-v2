@@ -58,9 +58,9 @@ export interface BloodPressureRecord {
   position: 'sitting' | 'standing' | 'lying';
   notes: string;
   imageUrl: string;
-  isShared: boolean;
   createdAt: Date;
   updatedAt: Date;
+  ownerDisplayName?: string;
 }
 
 export interface BloodPressureFormData {
