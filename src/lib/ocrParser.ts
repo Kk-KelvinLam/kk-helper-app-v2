@@ -3,6 +3,10 @@
  * Extracts structured data from raw OCR text produced by Tesseract.js.
  */
 
+/**
+ * Parsed blood pressure data extracted from OCR text.
+ * Fields are numeric strings (e.g. '120') or empty strings when not detected.
+ */
 export interface ParsedBPData {
   systolic: string;
   diastolic: string;
@@ -339,7 +343,9 @@ export function parseBPText(text: string): ParsedBPData {
     result.heartRate = bpmMatch[1];
   }
 
-  // Extract all 2-3 digit numbers in valid physiological ranges
+  // Extract all 2-3 digit numbers in valid physiological ranges.
+  // Negative lookbehind/lookahead prevents matching partial numbers
+  // (e.g. avoids extracting '20' from '2024').
   const allNumbers: number[] = [];
   const numRegex = /(?<!\d)(\d{2,3})(?!\d)/g;
   let m;
