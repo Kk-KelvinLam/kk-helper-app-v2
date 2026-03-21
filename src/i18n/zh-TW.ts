@@ -119,6 +119,31 @@ const zhTW = {
   darkMode: '深色模式',
   settings: '設定',
 
+  // Profile & Sharing
+  navProfile: '個人',
+  profileTitle: '我的資料',
+  myQRCode: '我的 QR Code',
+  myQRCodeHint: '讓其他用戶掃描此 QR Code 以接收你的分享紀錄',
+  scanQRCode: '掃描 QR Code',
+  scanQRCodeHint: '掃描其他用戶的 QR Code 以連結',
+  sharedWithTitle: '已分享給',
+  sharedWithEmpty: '你尚未與任何人分享你的紀錄',
+  sharedWithMeTitle: '分享給我的',
+  sharedWithMeEmpty: '目前沒有人與你分享紀錄',
+  removeShare: '移除',
+  removeShareConfirm: '確定要停止與此用戶的分享嗎？',
+  shareSuccess: '連結成功！你現在可以查看對方的分享紀錄。',
+  shareAlreadyExists: '你已經與此用戶連結。',
+  shareSelfError: '你不能與自己分享。',
+  shareInvalidQR: '無效的 QR Code。請掃描有效的格價助手 QR Code。',
+  shareError: '連結失敗，請重試。',
+  startScanner: '開始掃描',
+  stopScanner: '停止掃描',
+  viewSharedRecords: '查看紀錄',
+  sharedRecordsTitle: '分享紀錄',
+  sharedRecordsFrom: '{name} 的紀錄',
+  backToProfile: '返回',
+
   // Categories
   allCategories: '全部',
 } as const;

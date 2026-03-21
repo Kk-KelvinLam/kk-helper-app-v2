@@ -2,10 +2,25 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Purchase records - users can only access their own records
+    // Purchase records - users can modify only their own records
+    // Read is allowed for authenticated users (sharing is enforced at application level)
     match /purchases/{purchaseId} {
-      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow read: if request.auth != null;
       allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    // Share records - users can read their own shares (as owner or recipient)
+    match /shares/{shareId} {
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.ownerUserId ||
+        request.auth.uid == resource.data.sharedWithUserId
+      );
+      allow create: if request.auth != null;
+      allow delete: if request.auth != null && (
+        request.auth.uid == resource.data.ownerUserId ||
+        request.auth.uid == resource.data.sharedWithUserId
+      );
     }
   }
 }

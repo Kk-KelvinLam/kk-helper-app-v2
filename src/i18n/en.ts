@@ -119,6 +119,31 @@ const en = {
   darkMode: 'Dark Mode',
   settings: 'Settings',
 
+  // Profile & Sharing
+  navProfile: 'Profile',
+  profileTitle: 'My Profile',
+  myQRCode: 'My QR Code',
+  myQRCodeHint: 'Let others scan this QR code to receive your shared records',
+  scanQRCode: 'Scan QR Code',
+  scanQRCodeHint: 'Scan another user\'s QR code to connect',
+  sharedWithTitle: 'Shared With',
+  sharedWithEmpty: 'You haven\'t shared your records with anyone yet',
+  sharedWithMeTitle: 'Shared With Me',
+  sharedWithMeEmpty: 'No one has shared their records with you yet',
+  removeShare: 'Remove',
+  removeShareConfirm: 'Are you sure you want to stop sharing with this user?',
+  shareSuccess: 'Successfully connected! You can now see their shared records.',
+  shareAlreadyExists: 'You are already connected with this user.',
+  shareSelfError: 'You cannot share with yourself.',
+  shareInvalidQR: 'Invalid QR code. Please scan a valid Price Tracker QR code.',
+  shareError: 'Failed to connect. Please try again.',
+  startScanner: 'Start Scanner',
+  stopScanner: 'Stop Scanner',
+  viewSharedRecords: 'View Records',
+  sharedRecordsTitle: 'Shared Records',
+  sharedRecordsFrom: 'Records from {name}',
+  backToProfile: 'Back',
+
   // Categories
   allCategories: 'All',
 } as const;

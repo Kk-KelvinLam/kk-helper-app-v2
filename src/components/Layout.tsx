@@ -3,12 +3,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { languageNames, type Language } from '@/i18n';
-import { ShoppingBag, TrendingUp, Calculator, LogOut, User, Moon, Sun, Globe, Settings, X } from 'lucide-react';
+import { ShoppingBag, TrendingUp, Calculator, LogOut, User, Moon, Sun, Globe, Settings, X, UserCircle } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
-  currentPage: 'records' | 'market' | 'calculator';
-  onNavigate: (page: 'records' | 'market' | 'calculator') => void;
+  currentPage: 'records' | 'market' | 'calculator' | 'profile';
+  onNavigate: (page: 'records' | 'market' | 'calculator' | 'profile') => void;
 }
 
 export default function Layout({ children, currentPage, onNavigate }: LayoutProps) {
@@ -106,6 +106,17 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
           >
             <Calculator className="w-5 h-5" />
             <span className="text-xs font-medium">{t('navCalculator')}</span>
+          </button>
+          <button
+            onClick={() => onNavigate('profile')}
+            className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${
+              currentPage === 'profile'
+                ? 'text-indigo-600 dark:text-indigo-400'
+                : isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
+            }`}
+          >
+            <UserCircle className="w-5 h-5" />
+            <span className="text-xs font-medium">{t('navProfile')}</span>
           </button>
         </div>
       </nav>
