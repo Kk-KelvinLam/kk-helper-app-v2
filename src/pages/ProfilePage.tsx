@@ -173,6 +173,7 @@ export default function ProfilePage() {
 
   const handleGenderChange = async (newGender: Gender) => {
     if (!user) return;
+    const previousGender = gender;
     setGender(newGender);
     setGenderSaving(true);
     try {
@@ -180,6 +181,7 @@ export default function ProfilePage() {
       setMessage({ type: 'success', text: t('profileSaved') });
     } catch (error) {
       console.error('Error saving gender:', error);
+      setGender(previousGender);
       setMessage({ type: 'error', text: t('profileSaveError') });
     } finally {
       setGenderSaving(false);
