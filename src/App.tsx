@@ -6,13 +6,14 @@ import LoginPage from '@/pages/LoginPage';
 import RecordsPage from '@/pages/RecordsPage';
 import MarketPricePage from '@/pages/MarketPricePage';
 import UnitPriceCalculatorPage from '@/pages/UnitPriceCalculatorPage';
+import ProfilePage from '@/pages/ProfilePage';
 import Layout from '@/components/Layout';
 
 export default function App() {
   const { user, loading } = useAuth();
   const { isDark } = useTheme();
   const { t } = useLanguage();
-  const [currentPage, setCurrentPage] = useState<'records' | 'market' | 'calculator'>('records');
+  const [currentPage, setCurrentPage] = useState<'records' | 'market' | 'calculator' | 'profile'>('records');
 
   if (loading) {
     return (
@@ -34,6 +35,7 @@ export default function App() {
       {currentPage === 'records' && <RecordsPage />}
       {currentPage === 'market' && <MarketPricePage />}
       {currentPage === 'calculator' && <UnitPriceCalculatorPage />}
+      {currentPage === 'profile' && <ProfilePage />}
     </Layout>
   );
 }

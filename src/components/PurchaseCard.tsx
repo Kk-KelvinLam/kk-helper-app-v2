@@ -5,11 +5,12 @@ import { MapPin, Tag, Pencil, Trash2 } from 'lucide-react';
 
 interface PurchaseCardProps {
   purchase: PurchaseRecord;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  readOnly?: boolean;
 }
 
-export default function PurchaseCard({ purchase, onEdit, onDelete }: PurchaseCardProps) {
+export default function PurchaseCard({ purchase, onEdit, onDelete, readOnly }: PurchaseCardProps) {
   const { t } = useLanguage();
   const { isDark } = useTheme();
 
@@ -56,7 +57,9 @@ export default function PurchaseCard({ purchase, onEdit, onDelete }: PurchaseCar
       )}
 
       {/* Actions */}
-      <div className="mt-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+      {!readOnly && (onEdit || onDelete) && (
+      <div className="mt-3 flex gap-2">
+        {onEdit && (
         <button
           onClick={onEdit}
           className={`flex items-center gap-1.5 text-xs py-1.5 px-3 rounded-lg transition-colors ${
@@ -68,6 +71,8 @@ export default function PurchaseCard({ purchase, onEdit, onDelete }: PurchaseCar
           <Pencil className="w-3.5 h-3.5" />
           {t('edit')}
         </button>
+        )}
+        {onDelete && (
         <button
           onClick={onDelete}
           className={`flex items-center gap-1.5 text-xs py-1.5 px-3 rounded-lg transition-colors ${
@@ -79,7 +84,9 @@ export default function PurchaseCard({ purchase, onEdit, onDelete }: PurchaseCar
           <Trash2 className="w-3.5 h-3.5" />
           {t('delete')}
         </button>
+        )}
       </div>
+      )}
     </div>
   );
 }

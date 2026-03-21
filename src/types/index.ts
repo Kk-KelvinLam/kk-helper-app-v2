@@ -35,6 +35,17 @@ export interface User {
   photoURL: string | null;
 }
 
+export interface ShareRecord {
+  id: string;
+  ownerUserId: string;
+  ownerDisplayName: string;
+  ownerEmail: string;
+  sharedWithUserId: string;
+  sharedWithDisplayName: string;
+  sharedWithEmail: string;
+  createdAt: Date;
+}
+
 export const CATEGORIES = [
   '🥬 蔬菜 Vegetables',
   '🍎 水果 Fruits',
