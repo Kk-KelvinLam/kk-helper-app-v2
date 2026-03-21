@@ -4,7 +4,6 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import {
   addBPRecord,
-  updateBPRecord,
   deleteBPRecord,
   getUserBPRecords,
   classifyBP,
@@ -12,7 +11,8 @@ import {
   analyzeBPRecords,
   getBPNormalDescKey,
 } from '@/lib/bloodPressure';
-import type { BloodPressureRecord, BloodPressureFormData, BPCategory, Gender } from '@/types';
+import { getSharedWithMe } from '@/lib/sharing';
+import type { BloodPressureRecord, BloodPressureFormData, BPCategory, Gender, ShareRecord } from '@/types';
 import type { TranslationKeys } from '@/i18n';
 import { getUserProfile } from '@/lib/userProfile';
 import {
@@ -23,7 +23,6 @@ import {
   Info,
   BarChart3,
   TrendingUp,
-  Share2,
   Camera,
   X,
   Loader2,
@@ -136,13 +135,14 @@ export default function BloodPressurePage() {
   const { isDark } = useTheme();
 
   const [records, setRecords] = useState<BloodPressureRecord[]>([]);
+  const [sharedWithMe, setSharedWithMe] = useState<ShareRecord[]>([]);
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showRangeRef, setShowRangeRef] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [showChart, setShowChart] = useState(false);
-  const [showManageSharing, setShowManageSharing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
   const [userGender, setUserGender] = useState<Gender>('unspecified');
@@ -165,12 +165,30 @@ export default function BloodPressurePage() {
     setLoading(true);
     setError(null);
     try {
-      const [data, profile] = await Promise.all([
+      const [data, profile, sharedUsers] = await Promise.all([
         getUserBPRecords(user.uid),
         getUserProfile(user.uid),
+        getSharedWithMe(user.uid),
       ]);
-      setRecords(data);
+      setSharedWithMe(sharedUsers);
       if (profile) setUserGender(profile.gender);
+
+      const sharedRecordsArrays = await Promise.all(
+        sharedUsers.map(async (share) => {
+          const sharedRecords = await getUserBPRecords(share.ownerUserId);
+          return sharedRecords.map((r) => ({
+            ...r,
+            ownerDisplayName: share.ownerDisplayName || share.ownerEmail,
+          }));
+        })
+      );
+
+      const allRecords = [
+        ...data,
+        ...sharedRecordsArrays.flat(),
+      ].sort((a, b) => b.measuredAt.getTime() - a.measuredAt.getTime());
+
+      setRecords(allRecords);
     } catch (err) {
       console.error('Error loading BP records:', err);
       setError(t('bpLoadError'));
@@ -220,17 +238,6 @@ export default function BloodPressurePage() {
     }
   };
 
-  const handleToggleShare = async (record: BloodPressureRecord) => {
-    try {
-      await updateBPRecord(record.id, { isShared: !record.isShared });
-      setRecords((prev) =>
-        prev.map((r) => (r.id === record.id ? { ...r, isShared: !r.isShared } : r))
-      );
-    } catch (err) {
-      console.error('Error toggling share:', err);
-    }
-  };
-
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -251,7 +258,28 @@ export default function BloodPressurePage() {
     }
   };
 
-  const analysis = analyzeBPRecords(records);
+  const toggleUserFilter = (userId: string) => {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) {
+        next.delete(userId);
+      } else {
+        next.add(userId);
+      }
+      return next;
+    });
+  };
+
+  const filteredRecords = records.filter((r) => {
+    if (selectedUserIds.size > 0) {
+      const isOwn = !r.ownerDisplayName;
+      if (isOwn && !selectedUserIds.has(user!.uid)) return false;
+      if (!isOwn && !selectedUserIds.has(r.userId)) return false;
+    }
+    return true;
+  });
+
+  const analysis = analyzeBPRecords(filteredRecords);
 
   return (
     <div className="space-y-6">
@@ -261,7 +289,7 @@ export default function BloodPressurePage() {
           <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{t('bpTitle')}</h1>
           <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
             {t('bpSubtitle')}
-            {records.length > 0 && ` · ${t('bpRecordsSaved', { count: records.length })}`}
+            {filteredRecords.length > 0 && ` · ${t('bpRecordsSaved', { count: filteredRecords.length })}`}
           </p>
         </div>
         <button
@@ -308,17 +336,6 @@ export default function BloodPressurePage() {
           <TrendingUp className="w-4 h-4" />
           {t('bpAnalysis')}
         </button>
-        <button
-          onClick={() => setShowManageSharing(!showManageSharing)}
-          className={`flex items-center gap-1.5 whitespace-nowrap px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-            showManageSharing
-              ? 'bg-indigo-600 text-white'
-              : isDark ? 'bg-gray-800 text-gray-300 border border-gray-700' : 'bg-white text-gray-600 border border-gray-200'
-          }`}
-        >
-          <Share2 className="w-4 h-4" />
-          {t('bpManageSharing')}
-        </button>
       </div>
 
       {/* Normal Range Reference */}
@@ -354,12 +371,12 @@ export default function BloodPressurePage() {
       {showChart && (
         <div className={`rounded-xl border p-4 ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
           <h3 className={`font-semibold mb-3 ${isDark ? 'text-white' : 'text-gray-900'}`}>{t('bpHistory')}</h3>
-          {records.length < 2 ? (
+          {filteredRecords.length < 2 ? (
             <p className={`text-sm text-center py-4 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
               {t('bpTapAdd')}
             </p>
           ) : (
-            <BPHistoryChart records={records} isDark={isDark} t={t} locale={language} />
+            <BPHistoryChart records={filteredRecords} isDark={isDark} t={t} locale={language} />
           )}
         </div>
       )}
@@ -444,55 +461,48 @@ export default function BloodPressurePage() {
         </div>
       )}
 
-      {/* Manage Sharing */}
-      {showManageSharing && (
-        <div className={`rounded-xl border p-4 ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
-          <h3 className={`font-semibold mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{t('bpManageSharing')}</h3>
-          <p className={`text-sm mb-4 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{t('bpSharingHint')}</p>
-
-          {records.length === 0 ? (
-            <p className={`text-sm text-center py-4 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-              {t('bpNoRecords')}
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {records.map((record) => {
-                const cat = classifyBP(record.systolic, record.diastolic);
-                return (
-                  <div
-                    key={record.id}
-                    className={`flex items-center justify-between p-3 rounded-xl ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: getBPCategoryColor(cat) }} />
-                      <div className="min-w-0">
-                        <span className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                          {record.systolic}/{record.diastolic}
-                        </span>
-                        <span className={`text-xs ml-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                          {record.measuredAt.toLocaleDateString()}
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => handleToggleShare(record)}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
-                        record.isShared
-                          ? 'bg-indigo-600'
-                          : isDark ? 'bg-gray-600' : 'bg-gray-300'
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          record.isShared ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+      {/* User Filter Chips */}
+      {sharedWithMe.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setSelectedUserIds(new Set())}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              selectedUserIds.size === 0
+                ? 'bg-indigo-600 text-white'
+                : isDark
+                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            {t('allUsers')}
+          </button>
+          <button
+            onClick={() => toggleUserFilter(user!.uid)}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              selectedUserIds.has(user!.uid)
+                ? 'bg-indigo-600 text-white'
+                : isDark
+                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            {t('me')}
+          </button>
+          {sharedWithMe.map((share) => (
+            <button
+              key={share.id}
+              onClick={() => toggleUserFilter(share.ownerUserId)}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                selectedUserIds.has(share.ownerUserId)
+                  ? 'bg-indigo-600 text-white'
+                  : isDark
+                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {share.ownerDisplayName || share.ownerEmail}
+            </button>
+          ))}
         </div>
       )}
 
@@ -510,7 +520,7 @@ export default function BloodPressurePage() {
         <div className="flex items-center justify-center py-20">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
         </div>
-      ) : records.length === 0 ? (
+      ) : filteredRecords.length === 0 ? (
         <div className="text-center py-20">
           <Heart className={`w-16 h-16 mx-auto mb-4 ${isDark ? 'text-gray-600' : 'text-gray-300'}`} />
           <h3 className={`text-lg font-medium mb-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
@@ -522,9 +532,10 @@ export default function BloodPressurePage() {
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {records.map((record) => {
+          {filteredRecords.map((record) => {
             const cat = classifyBP(record.systolic, record.diastolic);
             const catColor = getBPCategoryColor(cat);
+            const isSharedRecord = !!record.ownerDisplayName;
             return (
               <div
                 key={record.id}
@@ -537,26 +548,23 @@ export default function BloodPressurePage() {
                       {getCategoryLabel(cat)}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => handleToggleShare(record)}
-                      className={`p-1.5 rounded-lg transition-colors ${
-                        record.isShared
-                          ? 'text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30'
-                          : isDark ? 'text-gray-600 hover:bg-gray-700' : 'text-gray-300 hover:bg-gray-100'
-                      }`}
-                      title={record.isShared ? t('bpShared') : t('bpNotShared')}
-                    >
-                      <Share2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(record.id)}
-                      className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-gray-700 text-gray-500' : 'hover:bg-gray-100 text-gray-400'}`}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                  {!isSharedRecord && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleDelete(record.id)}
+                        className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-gray-700 text-gray-500' : 'hover:bg-gray-100 text-gray-400'}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
+
+                {isSharedRecord && (
+                  <p className={`text-xs mb-2 truncate ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}>
+                    {t('sharedBy', { name: record.ownerDisplayName! })}
+                  </p>
+                )}
 
                 <div className="flex items-baseline gap-1 mb-1">
                   <span className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>

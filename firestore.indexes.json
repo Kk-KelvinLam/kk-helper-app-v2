@@ -7,21 +7,13 @@
         { "fieldPath": "userId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
-    }
-    {
-      "collectionGroup": "bloodPressureRecords",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "userId", "order": "ASCENDING" },
-        { "fieldPath": "measuredAt", "order": "DESCENDING" }
-      ]
     },
     {
       "collectionGroup": "bloodPressureRecords",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "userId", "order": "ASCENDING" },
-        { "fieldPath": "isShared", "order": "ASCENDING" }
+        { "fieldPath": "measuredAt", "order": "DESCENDING" }
       ]
     }
   ],

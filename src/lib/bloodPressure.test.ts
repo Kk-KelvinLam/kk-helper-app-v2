@@ -71,19 +71,19 @@ describe('bloodPressure', () => {
         {
           id: '1', userId: 'u1', systolic: 120, diastolic: 80, heartRate: 72,
           measuredAt: new Date(), arm: 'left', position: 'sitting',
-          notes: '', imageUrl: '', isShared: false,
+          notes: '', imageUrl: '',
           createdAt: new Date(), updatedAt: new Date(),
         },
         {
           id: '2', userId: 'u1', systolic: 130, diastolic: 85, heartRate: 78,
           measuredAt: new Date(), arm: 'left', position: 'sitting',
-          notes: '', imageUrl: '', isShared: false,
+          notes: '', imageUrl: '',
           createdAt: new Date(), updatedAt: new Date(),
         },
         {
           id: '3', userId: 'u1', systolic: 110, diastolic: 70, heartRate: 65,
           measuredAt: new Date(), arm: 'left', position: 'sitting',
-          notes: '', imageUrl: '', isShared: false,
+          notes: '', imageUrl: '',
           createdAt: new Date(), updatedAt: new Date(),
         },
       ];
@@ -107,13 +107,13 @@ describe('bloodPressure', () => {
         {
           id: '1', userId: 'u1', systolic: 110, diastolic: 70, heartRate: 72,
           measuredAt: new Date(), arm: 'left', position: 'sitting',
-          notes: '', imageUrl: '', isShared: false,
+          notes: '', imageUrl: '',
           createdAt: new Date(), updatedAt: new Date(),
         },
         {
           id: '2', userId: 'u1', systolic: 140, diastolic: 90, heartRate: 80,
           measuredAt: new Date(), arm: 'left', position: 'sitting',
-          notes: '', imageUrl: '', isShared: false,
+          notes: '', imageUrl: '',
           createdAt: new Date(), updatedAt: new Date(),
         },
       ];
