@@ -9,6 +9,7 @@ export interface PurchaseRecord {
   imageUrl: string;
   createdAt: Date;
   updatedAt: Date;
+  ownerDisplayName?: string;
 }
 
 export interface PurchaseFormData {

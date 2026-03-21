@@ -146,6 +146,9 @@ const en = {
 
   // Categories
   allCategories: 'All',
+  me: 'Me',
+  sharedBy: 'Shared by {name}',
+  allUsers: 'All',
 } as const;
 
 export default en;
