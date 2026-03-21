@@ -58,10 +58,10 @@ export default function LoginPage() {
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
           <div className={`inline-flex items-center justify-center w-20 h-20 rounded-2xl mb-6 ${isDark ? 'bg-indigo-900/50' : 'bg-indigo-100'}`}>
-            <span className="text-4xl">🛒</span>
+            <span className="text-4xl">🏠</span>
           </div>
-          <h1 className={`text-3xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>格價助手</h1>
-          <h2 className={`text-xl mb-1 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>Price Tracker</h2>
+          <h1 className={`text-3xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>{t('appName')}</h1>
+          <h2 className={`text-xl mb-1 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>{t('appSubtitle')}</h2>
           <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
             {t('appTagline')}
           </p>
