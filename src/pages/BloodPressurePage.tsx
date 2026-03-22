@@ -147,6 +147,7 @@ export default function BloodPressurePage() {
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [showChart, setShowChart] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
   const [userGender, setUserGender] = useState<Gender>('unspecified');
   const [showCamera, setShowCamera] = useState(false);
@@ -217,6 +218,7 @@ export default function BloodPressurePage() {
       imageUrl: '',
     });
     setOcrFilled(false);
+    setSaveError(null);
   };
 
   const handleBPTextExtracted = (text: string) => {
@@ -237,16 +239,28 @@ export default function BloodPressurePage() {
     setShowCamera(false);
   };
 
+  const handleBPImageCaptured = (imageDataUrl: string) => {
+    setFormData((prev) => ({ ...prev, imageUrl: imageDataUrl }));
+  };
+
   const handleSave = async () => {
     if (!user || !formData.systolic || !formData.diastolic || !formData.heartRate) return;
     setSaving(true);
+    setSaveError(null);
     try {
-      await addBPRecord(user.uid, formData);
+      // TODO: Upload imageUrl to Firebase Storage once configured; for now, strip
+      // base64 data URLs to avoid exceeding Firestore's 1 MB document size limit.
+      const dataToSave: BloodPressureFormData = {
+        ...formData,
+        imageUrl: formData.imageUrl.startsWith('data:') ? '' : formData.imageUrl,
+      };
+      await addBPRecord(user.uid, dataToSave);
       setShowAddModal(false);
       resetForm();
       await loadRecords();
     } catch (err) {
       console.error('Error saving BP record:', err);
+      setSaveError(t('bpSaveError'));
     } finally {
       setSaving(false);
     }
@@ -664,9 +678,11 @@ export default function BloodPressurePage() {
                   {t('bpSystolic')} ({t('bpMmHg')})
                 </label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   value={formData.systolic}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, systolic: e.target.value }))}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, systolic: e.target.value.replace(/\D/g, '') }))}
                   placeholder="120"
                   className={`w-full px-4 py-2.5 rounded-xl border outline-none transition-all ${
                     isDark
@@ -682,9 +698,11 @@ export default function BloodPressurePage() {
                   {t('bpDiastolic')} ({t('bpMmHg')})
                 </label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   value={formData.diastolic}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, diastolic: e.target.value }))}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, diastolic: e.target.value.replace(/\D/g, '') }))}
                   placeholder="80"
                   className={`w-full px-4 py-2.5 rounded-xl border outline-none transition-all ${
                     isDark
@@ -700,9 +718,11 @@ export default function BloodPressurePage() {
                   {t('bpHeartRate')} ({t('bpBPM')})
                 </label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   value={formData.heartRate}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, heartRate: e.target.value }))}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, heartRate: e.target.value.replace(/\D/g, '') }))}
                   placeholder="72"
                   className={`w-full px-4 py-2.5 rounded-xl border outline-none transition-all ${
                     isDark
@@ -844,6 +864,14 @@ export default function BloodPressurePage() {
                 </div>
               )}
 
+              {/* Save Error */}
+              {saveError && (
+                <div className={`flex items-center gap-2 text-sm p-3 rounded-lg ${isDark ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-600'}`}>
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  {saveError}
+                </div>
+              )}
+
               {/* Save Button */}
               <button
                 onClick={handleSave}
@@ -883,6 +911,7 @@ export default function BloodPressurePage() {
       {showCamera && (
         <CameraCapture
           onTextExtracted={handleBPTextExtracted}
+          onImageCaptured={handleBPImageCaptured}
           onClose={() => setShowCamera(false)}
           title={t('bpScanReading')}
           hint={t('bpCaptureHint')}
