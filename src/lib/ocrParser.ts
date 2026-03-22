@@ -285,14 +285,15 @@ export function parseBPText(text: string): ParsedBPData {
   if (!normalized) return result;
 
   // --- Strategy 1: Labeled patterns (most reliable) ---
+  // Allow optional unit text (e.g. "mmHg") between labels and numbers
   const sysMatch = normalized.match(
-    /(?:SYS(?:TOLIC)?|上壓|收縮壓?|收縮)[.:\s]*(\d{2,3})/i,
+    /(?:SYS(?:TOLIC)?|上壓|收縮壓?|收縮)[.:\s]*(?:mm\s*Hg|kPa)?\s*(\d{2,3})/i,
   );
   const diaMatch = normalized.match(
-    /(?:DIA(?:STOLIC)?|下壓|舒張壓?|舒張)[.:\s]*(\d{2,3})/i,
+    /(?:DIA(?:STOLIC)?|下壓|舒張壓?|舒張)[.:\s]*(?:mm\s*Hg|kPa)?\s*(\d{2,3})/i,
   );
   const pulMatch = normalized.match(
-    /(?:PUL(?:SE)?|HR|HEART\s*RATE|PR|脈搏|心跳|脈率)[.:\s]*(\d{2,3})/i,
+    /(?:PUL(?:SE)?|HR|HEART\s*RATE|PR|脈搏|心跳|脈率)[.:\s]*(?:\/min|bpm)?\s*(\d{2,3})/i,
   );
 
   if (sysMatch) result.systolic = sysMatch[1];
@@ -364,10 +365,37 @@ export function parseBPText(text: string): ParsedBPData {
     if (idx >= 0) pool.splice(idx, 1);
   }
 
+  // Try positional order first: BP monitors display systolic (row 1),
+  // diastolic (row 2), heart rate (row 3) from top to bottom.
+  // OCR preserves this top-to-bottom order in the extracted text.
+  if (pool.length >= 2) {
+    const first = pool[0];
+    const second = pool[1];
+    if (
+      first >= 70 &&
+      first <= 250 &&
+      second >= 40 &&
+      second <= 150 &&
+      first > second
+    ) {
+      result.systolic = String(first);
+      result.diastolic = String(second);
+      if (
+        !result.heartRate &&
+        pool.length >= 3 &&
+        pool[2] >= 30 &&
+        pool[2] <= 200
+      ) {
+        result.heartRate = String(pool[2]);
+      }
+      return result;
+    }
+  }
+
+  // Fallback: sort by value when positional order doesn't produce valid results
   const unique = [...new Set(pool)];
 
   if (unique.length >= 2) {
-    // Sort descending: systolic is typically the highest number
     const sorted = [...unique].sort((a, b) => b - a);
     if (
       sorted[0] >= 70 &&

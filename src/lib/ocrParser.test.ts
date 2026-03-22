@@ -367,5 +367,35 @@ describe('ocrParser', () => {
         systolic: '125', diastolic: '82', heartRate: '70',
       });
     });
+
+    it('uses positional order when heart rate > diastolic', () => {
+      expect(parseBPText('130\n70\n85')).toEqual({
+        systolic: '130', diastolic: '70', heartRate: '85',
+      });
+    });
+
+    it('uses positional order for typical BP monitor (sys > hr > dia)', () => {
+      expect(parseBPText('115\n72\n78')).toEqual({
+        systolic: '115', diastolic: '72', heartRate: '78',
+      });
+    });
+
+    it('extracts labels with mmHg unit between label and number', () => {
+      expect(parseBPText('SYS mmHg 120\nDIA mmHg 80\nPUL /min 72')).toEqual({
+        systolic: '120', diastolic: '80', heartRate: '72',
+      });
+    });
+
+    it('extracts labels with kPa unit between label and number', () => {
+      expect(parseBPText('SYS kPa 120\nDIA kPa 80\nPUL 72')).toEqual({
+        systolic: '120', diastolic: '80', heartRate: '72',
+      });
+    });
+
+    it('handles duplicate diastolic and heart rate values via positional order', () => {
+      expect(parseBPText('120\n80\n80')).toEqual({
+        systolic: '120', diastolic: '80', heartRate: '80',
+      });
+    });
   });
 });
