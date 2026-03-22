@@ -6,6 +6,7 @@ import Tesseract from 'tesseract.js';
 
 interface CameraCaptureProps {
   onTextExtracted: (text: string) => void;
+  onImageCaptured?: (imageDataUrl: string) => void;
   onClose: () => void;
   title?: string;
   hint?: string;
@@ -13,7 +14,7 @@ interface CameraCaptureProps {
 
 type CameraState = 'idle' | 'streaming' | 'preview';
 
-export default function CameraCapture({ onTextExtracted, onClose, title, hint }: CameraCaptureProps) {
+export default function CameraCapture({ onTextExtracted, onImageCaptured, onClose, title, hint }: CameraCaptureProps) {
   const { t } = useLanguage();
   const { isDark } = useTheme();
   const [cameraState, setCameraState] = useState<CameraState>('idle');
@@ -111,6 +112,9 @@ export default function CameraCapture({ onTextExtracted, onClose, title, hint }:
     try {
       const result = await Tesseract.recognize(imagePreview, 'eng+chi_tra');
       const text = result.data.text.trim();
+      if (onImageCaptured) {
+        onImageCaptured(imagePreview);
+      }
       onTextExtracted(text || t('noTextDetected'));
     } catch {
       setError(t('imageProcessError'));
