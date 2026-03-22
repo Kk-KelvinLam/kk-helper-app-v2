@@ -4,6 +4,8 @@ export interface UnitPriceItem {
   price: string;
   quantity: string;
   unit: string;
+  /** Number of units in a pack/bundle (for multi-unit discount scenarios). Defaults to 1. */
+  itemCount: string;
 }
 
 export interface UnitPriceResult {
@@ -79,7 +81,8 @@ export function calculateUnitPrices(items: UnitPriceItem[]): UnitPriceResult[] {
   const results: UnitPriceResult[] = validItems.map((item) => {
     const price = parseFloat(item.price);
     const quantity = parseFloat(item.quantity);
-    const baseAmount = convertToBase(quantity, item.unit);
+    const itemCount = parseFloat(item.itemCount || '1') || 1;
+    const baseAmount = convertToBase(quantity, item.unit) * itemCount;
     const pricePerGram = price / baseAmount;
 
     return {

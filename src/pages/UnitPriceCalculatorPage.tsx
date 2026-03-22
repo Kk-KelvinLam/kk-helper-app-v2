@@ -8,17 +8,19 @@ import {
   type UnitPriceItem,
 } from '@/lib/unitPriceCalculator';
 import { parsePriceTagText } from '@/lib/ocrParser';
+import { useTestingMode } from '@/contexts/TestingModeContext';
 import CameraCapture from '@/components/CameraCapture';
 import { Plus, Trash2, Trophy, Camera, X } from 'lucide-react';
 
 let nextId = 1;
 function createItem(): UnitPriceItem {
-  return { id: `item-${nextId++}`, name: '', price: '', quantity: '', unit: 'g' };
+  return { id: `item-${nextId++}`, name: '', price: '', quantity: '', unit: 'g', itemCount: '1' };
 }
 
 export default function UnitPriceCalculatorPage() {
   const { t } = useLanguage();
   const { isDark } = useTheme();
+  const { isTestingMode } = useTestingMode();
   const [items, setItems] = useState<UnitPriceItem[]>([createItem(), createItem()]);
   const [showCamera, setShowCamera] = useState(false);
   const [cameraTargetId, setCameraTargetId] = useState<string | null>(null);
@@ -128,9 +130,9 @@ export default function UnitPriceCalculatorPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {/* Product Name */}
-              <div className="col-span-2">
+              <div className="col-span-2 sm:col-span-3">
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -143,17 +145,19 @@ export default function UnitPriceCalculatorPage() {
                         : 'border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent'
                     }`}
                   />
-                  <button
-                    onClick={() => handleCameraCapture(item.id)}
-                    className={`p-2 rounded-lg border transition-colors ${
-                      isDark
-                        ? 'border-gray-600 text-gray-400 hover:text-indigo-400 hover:border-indigo-500 hover:bg-indigo-900/30'
-                        : 'border-gray-200 text-gray-400 hover:text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50'
-                    }`}
-                    title={t('scanPriceTag')}
-                  >
-                    <Camera className="w-4 h-4" />
-                  </button>
+                  {isTestingMode && (
+                    <button
+                      onClick={() => handleCameraCapture(item.id)}
+                      className={`p-2 rounded-lg border transition-colors ${
+                        isDark
+                          ? 'border-gray-600 text-gray-400 hover:text-indigo-400 hover:border-indigo-500 hover:bg-indigo-900/30'
+                          : 'border-gray-200 text-gray-400 hover:text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50'
+                      }`}
+                      title={t('scanPriceTag')}
+                    >
+                      <Camera className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -177,12 +181,32 @@ export default function UnitPriceCalculatorPage() {
                 />
               </div>
 
-              {/* Quantity + Unit */}
+              {/* Item Count (pcs) */}
+              <div>
+                <label className={`block text-xs mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {t('itemQuantityCount')}
+                </label>
+                <input
+                  type="number"
+                  step="1"
+                  min="1"
+                  placeholder="1"
+                  value={item.itemCount}
+                  onChange={(e) => updateItem(item.id, 'itemCount', e.target.value)}
+                  className={`w-full px-3 py-2 rounded-lg border text-sm outline-none transition-all ${
+                    isDark
+                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent'
+                      : 'border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent'
+                  }`}
+                />
+              </div>
+
+              {/* Quantity + Unit (per item weight/volume) */}
               <div>
                 <label className={`block text-xs mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                   {t('quantity')}
                 </label>
-                <div className="flex gap-2">
+                <div className="flex gap-1">
                   <input
                     type="number"
                     step="0.1"
@@ -199,7 +223,7 @@ export default function UnitPriceCalculatorPage() {
                   <select
                     value={item.unit}
                     onChange={(e) => updateItem(item.id, 'unit', e.target.value)}
-                    className={`px-2 py-2 rounded-lg border text-sm outline-none transition-all ${
+                    className={`px-1 py-2 rounded-lg border text-sm outline-none transition-all ${
                       isDark
                         ? 'bg-gray-700 border-gray-600 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent'
                         : 'bg-white border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent'

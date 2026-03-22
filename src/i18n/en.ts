@@ -118,6 +118,8 @@ const en = {
   language: 'Language',
   darkMode: 'Dark Mode',
   settings: 'Settings',
+  testingMode: 'Testing Mode',
+  testingModeHint: 'Show debug info for OCR and experimental features',
 
   // Profile & Sharing
   navProfile: 'Profile',
@@ -210,6 +212,14 @@ const en = {
   bpSaveError: 'Failed to save reading. Please try again.',
   bpScanReading: 'Scan BP Monitor',
   bpCaptureHint: 'Take a photo of your blood pressure monitor to auto-fill readings',
+
+  // OCR debug
+  ocrRawText: 'OCR Raw Text',
+  ocrStrategy: 'Strategy Used',
+
+  // Unit Price Calculator
+  itemQuantityCount: 'Qty (pcs)',
+  itemQuantityCountHint: 'Number of units in pack',
 
   // Categories
   allCategories: 'All',

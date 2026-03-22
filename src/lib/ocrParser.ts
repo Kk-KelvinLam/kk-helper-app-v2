@@ -11,6 +11,8 @@ export interface ParsedBPData {
   systolic: string;
   diastolic: string;
   heartRate: string;
+  /** Strategy number used for extraction (1=labeled, 2=slash, 3=numbers-only). Present only for debugging. */
+  strategy?: number;
 }
 
 export interface ParsedReceiptData {
@@ -286,14 +288,15 @@ export function parseBPText(text: string): ParsedBPData {
 
   // --- Strategy 1: Labeled patterns (most reliable) ---
   // Allow optional unit text (e.g. "mmHg") between labels and numbers
+  // Supports both Traditional Chinese (收縮壓/舒張壓/脈搏) and Simplified Chinese (收缩压/舒张压/脉搏)
   const sysMatch = normalized.match(
-    /(?:SYS(?:TOLIC)?|上壓|收縮壓?|收縮)[.:\s]*(?:mm\s*Hg|kPa)?\s*(\d{2,3})/i,
+    /(?:SYS(?:TOLIC)?|上壓|上压|收縮壓?|收缩压?|收縮|收缩|高压)[.:\s]*(?:mm\s*Hg|kPa)?\s*(\d{2,3})/i,
   );
   const diaMatch = normalized.match(
-    /(?:DIA(?:STOLIC)?|下壓|舒張壓?|舒張)[.:\s]*(?:mm\s*Hg|kPa)?\s*(\d{2,3})/i,
+    /(?:DIA(?:STOLIC)?|下壓|下压|舒張壓?|舒张压?|舒張|舒张|低压)[.:\s]*(?:mm\s*Hg|kPa)?\s*(\d{2,3})/i,
   );
   const pulMatch = normalized.match(
-    /(?:PUL(?:SE)?|HR|HEART\s*RATE|PR|脈搏|心跳|脈率)[.:\s]*(?:\/min|bpm)?\s*(\d{2,3})/i,
+    /(?:PUL(?:SE)?|HR|HEART\s*RATE|PR|脈搏|脉搏|心跳|脈率|脉率|心率)[.:\s]*(?:\/min|bpm)?\s*(\d{2,3})/i,
   );
 
   if (sysMatch) result.systolic = sysMatch[1];
@@ -305,6 +308,7 @@ export function parseBPText(text: string): ParsedBPData {
       const bpmMatch = normalized.match(/(\d{2,3})\s*BPM/i);
       if (bpmMatch) result.heartRate = bpmMatch[1];
     }
+    result.strategy = 1;
     return result;
   }
 
@@ -329,10 +333,11 @@ export function parseBPText(text: string): ParsedBPData {
       }
       if (!result.heartRate) {
         const pulMatch2 = normalized.match(
-          /(?:PUL(?:SE)?|HR|PR|脈搏|心跳|脈率)[.:\s]*(\d{2,3})/i,
+          /(?:PUL(?:SE)?|HR|PR|脈搏|脉搏|心跳|脈率|脉率|心率)[.:\s]*(\d{2,3})/i,
         );
         if (pulMatch2) result.heartRate = pulMatch2[1];
       }
+      result.strategy = 2;
       return result;
     }
   }
@@ -388,6 +393,7 @@ export function parseBPText(text: string): ParsedBPData {
       ) {
         result.heartRate = String(pool[2]);
       }
+      result.strategy = 3;
       return result;
     }
   }
@@ -415,6 +421,10 @@ export function parseBPText(text: string): ParsedBPData {
         result.heartRate = String(sorted[2]);
       }
     }
+  }
+
+  if (result.systolic || result.diastolic) {
+    result.strategy = 3;
   }
 
   return result;

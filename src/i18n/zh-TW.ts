@@ -118,6 +118,8 @@ const zhTW = {
   language: '語言',
   darkMode: '深色模式',
   settings: '設定',
+  testingMode: '測試模式',
+  testingModeHint: '顯示 OCR 除錯資訊及實驗功能',
 
   // Profile & Sharing
   navProfile: '個人',
@@ -210,6 +212,14 @@ const zhTW = {
   bpSaveError: '儲存量測紀錄失敗，請重試。',
   bpScanReading: '掃描血壓機',
   bpCaptureHint: '拍攝血壓機螢幕以自動填寫數值',
+
+  // OCR debug
+  ocrRawText: 'OCR 原始文字',
+  ocrStrategy: '使用策略',
+
+  // Unit Price Calculator
+  itemQuantityCount: '數量（件）',
+  itemQuantityCountHint: '包裝內件數',
 
   // Categories
   allCategories: '全部',

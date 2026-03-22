@@ -249,105 +249,158 @@ describe('ocrParser', () => {
   // -------------------------------------------------------------------------
   describe('parseBPText', () => {
     it('extracts from SYS/DIA/PUL labels', () => {
-      expect(parseBPText('SYS 120 DIA 80 PUL 72')).toEqual({
+      const result = parseBPText('SYS 120 DIA 80 PUL 72');
+      expect(result).toEqual(expect.objectContaining({
         systolic: '120', diastolic: '80', heartRate: '72',
-      });
+      }));
+      expect(result.strategy).toBe(1);
     });
 
     it('extracts from SYS./DIA./PUL. labels with dots', () => {
-      expect(parseBPText('SYS. 135\nDIA. 85\nPUL. 68')).toEqual({
+      const result = parseBPText('SYS. 135\nDIA. 85\nPUL. 68');
+      expect(result).toEqual(expect.objectContaining({
         systolic: '135', diastolic: '85', heartRate: '68',
-      });
+      }));
+      expect(result.strategy).toBe(1);
     });
 
     it('extracts from SYSTOLIC/DIASTOLIC labels', () => {
-      expect(parseBPText('Systolic: 118\nDiastolic: 78\nPulse: 65')).toEqual({
+      const result = parseBPText('Systolic: 118\nDiastolic: 78\nPulse: 65');
+      expect(result).toEqual(expect.objectContaining({
         systolic: '118', diastolic: '78', heartRate: '65',
-      });
+      }));
+      expect(result.strategy).toBe(1);
     });
 
     it('extracts from HR label', () => {
-      expect(parseBPText('SYS 120 DIA 80 HR 72')).toEqual({
+      const result = parseBPText('SYS 120 DIA 80 HR 72');
+      expect(result).toEqual(expect.objectContaining({
         systolic: '120', diastolic: '80', heartRate: '72',
-      });
+      }));
+      expect(result.strategy).toBe(1);
     });
 
     it('extracts with BPM suffix when labels present', () => {
-      expect(parseBPText('SYS 120 DIA 80 72BPM')).toEqual({
+      const result = parseBPText('SYS 120 DIA 80 72BPM');
+      expect(result).toEqual(expect.objectContaining({
         systolic: '120', diastolic: '80', heartRate: '72',
-      });
+      }));
+      expect(result.strategy).toBe(1);
     });
 
     it('extracts from slash format "120/80"', () => {
-      expect(parseBPText('120/80')).toEqual({
+      const result = parseBPText('120/80');
+      expect(result).toEqual(expect.objectContaining({
         systolic: '120', diastolic: '80', heartRate: '',
-      });
+      }));
+      expect(result.strategy).toBe(2);
     });
 
     it('extracts from slash format with spaces', () => {
-      expect(parseBPText('120 / 80')).toEqual({
+      const result = parseBPText('120 / 80');
+      expect(result).toEqual(expect.objectContaining({
         systolic: '120', diastolic: '80', heartRate: '',
-      });
+      }));
+      expect(result.strategy).toBe(2);
     });
 
     it('extracts from slash format with BPM', () => {
-      expect(parseBPText('120/80 72BPM')).toEqual({
+      const result = parseBPText('120/80 72BPM');
+      expect(result).toEqual(expect.objectContaining({
         systolic: '120', diastolic: '80', heartRate: '72',
-      });
+      }));
+      expect(result.strategy).toBe(2);
     });
 
     it('extracts from slash format with full-width slash', () => {
-      expect(parseBPText('135／88')).toEqual({
+      const result = parseBPText('135／88');
+      expect(result).toEqual(expect.objectContaining({
         systolic: '135', diastolic: '88', heartRate: '',
-      });
+      }));
+      expect(result.strategy).toBe(2);
     });
 
     it('extracts Chinese labels (收縮壓/舒張壓/脈搏)', () => {
-      expect(parseBPText('收縮壓 120 舒張壓 80 脈搏 72')).toEqual({
+      const result = parseBPText('收縮壓 120 舒張壓 80 脈搏 72');
+      expect(result).toEqual(expect.objectContaining({
         systolic: '120', diastolic: '80', heartRate: '72',
-      });
+      }));
+      expect(result.strategy).toBe(1);
     });
 
     it('extracts Chinese casual labels (上壓/下壓/心跳)', () => {
-      expect(parseBPText('上壓 120\n下壓 80\n心跳 72')).toEqual({
+      const result = parseBPText('上壓 120\n下壓 80\n心跳 72');
+      expect(result).toEqual(expect.objectContaining({
         systolic: '120', diastolic: '80', heartRate: '72',
-      });
+      }));
+      expect(result.strategy).toBe(1);
+    });
+
+    it('extracts Simplified Chinese labels (收缩压/舒张压/脉搏)', () => {
+      const result = parseBPText('收缩压 120 舒张压 80 脉搏 72');
+      expect(result).toEqual(expect.objectContaining({
+        systolic: '120', diastolic: '80', heartRate: '72',
+      }));
+      expect(result.strategy).toBe(1);
+    });
+
+    it('extracts Simplified Chinese casual labels (上压/下压/心率)', () => {
+      const result = parseBPText('上压 120\n下压 80\n心率 72');
+      expect(result).toEqual(expect.objectContaining({
+        systolic: '120', diastolic: '80', heartRate: '72',
+      }));
+      expect(result.strategy).toBe(1);
+    });
+
+    it('extracts Simplified Chinese labels (高压/低压)', () => {
+      const result = parseBPText('高压 130\n低压 85\n脉搏 68');
+      expect(result).toEqual(expect.objectContaining({
+        systolic: '130', diastolic: '85', heartRate: '68',
+      }));
+      expect(result.strategy).toBe(1);
     });
 
     it('extracts from three standalone numbers', () => {
-      expect(parseBPText('120\n80\n72')).toEqual({
+      const result = parseBPText('120\n80\n72');
+      expect(result).toEqual(expect.objectContaining({
         systolic: '120', diastolic: '80', heartRate: '72',
-      });
+      }));
+      expect(result.strategy).toBe(3);
     });
 
     it('extracts from three numbers in any order', () => {
-      expect(parseBPText('72\n120\n80')).toEqual({
+      const result = parseBPText('72\n120\n80');
+      expect(result).toEqual(expect.objectContaining({
         systolic: '120', diastolic: '80', heartRate: '72',
-      });
+      }));
+      expect(result.strategy).toBe(3);
     });
 
     it('extracts with mmHg and BPM suffixes', () => {
-      expect(parseBPText('120 mmHg\n80 mmHg\n72 BPM')).toEqual({
+      const result = parseBPText('120 mmHg\n80 mmHg\n72 BPM');
+      expect(result).toEqual(expect.objectContaining({
         systolic: '120', diastolic: '80', heartRate: '72',
-      });
+      }));
     });
 
     it('extracts systolic and diastolic only when two numbers found', () => {
-      expect(parseBPText('130\n85')).toEqual({
+      const result = parseBPText('130\n85');
+      expect(result).toEqual(expect.objectContaining({
         systolic: '130', diastolic: '85', heartRate: '',
-      });
+      }));
+      expect(result.strategy).toBe(3);
     });
 
     it('returns empty strings when no BP data found', () => {
-      expect(parseBPText('no numbers here')).toEqual({
+      expect(parseBPText('no numbers here')).toEqual(expect.objectContaining({
         systolic: '', diastolic: '', heartRate: '',
-      });
+      }));
     });
 
     it('returns empty strings for empty input', () => {
-      expect(parseBPText('')).toEqual({
+      expect(parseBPText('')).toEqual(expect.objectContaining({
         systolic: '', diastolic: '', heartRate: '',
-      });
+      }));
     });
 
     it('ignores date-like patterns (e.g. 2024/01/15)', () => {
@@ -357,45 +410,59 @@ describe('ocrParser', () => {
     });
 
     it('handles high blood pressure readings', () => {
-      expect(parseBPText('SYS 180 DIA 110 PUL 95')).toEqual({
+      const result = parseBPText('SYS 180 DIA 110 PUL 95');
+      expect(result).toEqual(expect.objectContaining({
         systolic: '180', diastolic: '110', heartRate: '95',
-      });
+      }));
+      expect(result.strategy).toBe(1);
     });
 
     it('handles PR label for pulse rate', () => {
-      expect(parseBPText('SYS 125\nDIA 82\nPR 70')).toEqual({
+      const result = parseBPText('SYS 125\nDIA 82\nPR 70');
+      expect(result).toEqual(expect.objectContaining({
         systolic: '125', diastolic: '82', heartRate: '70',
-      });
+      }));
+      expect(result.strategy).toBe(1);
     });
 
     it('uses positional order when heart rate > diastolic', () => {
-      expect(parseBPText('130\n70\n85')).toEqual({
+      const result = parseBPText('130\n70\n85');
+      expect(result).toEqual(expect.objectContaining({
         systolic: '130', diastolic: '70', heartRate: '85',
-      });
+      }));
+      expect(result.strategy).toBe(3);
     });
 
     it('uses positional order for typical BP monitor (sys > hr > dia)', () => {
-      expect(parseBPText('115\n72\n78')).toEqual({
+      const result = parseBPText('115\n72\n78');
+      expect(result).toEqual(expect.objectContaining({
         systolic: '115', diastolic: '72', heartRate: '78',
-      });
+      }));
+      expect(result.strategy).toBe(3);
     });
 
     it('extracts labels with mmHg unit between label and number', () => {
-      expect(parseBPText('SYS mmHg 120\nDIA mmHg 80\nPUL /min 72')).toEqual({
+      const result = parseBPText('SYS mmHg 120\nDIA mmHg 80\nPUL /min 72');
+      expect(result).toEqual(expect.objectContaining({
         systolic: '120', diastolic: '80', heartRate: '72',
-      });
+      }));
+      expect(result.strategy).toBe(1);
     });
 
     it('extracts labels with kPa unit between label and number', () => {
-      expect(parseBPText('SYS kPa 120\nDIA kPa 80\nPUL 72')).toEqual({
+      const result = parseBPText('SYS kPa 120\nDIA kPa 80\nPUL 72');
+      expect(result).toEqual(expect.objectContaining({
         systolic: '120', diastolic: '80', heartRate: '72',
-      });
+      }));
+      expect(result.strategy).toBe(1);
     });
 
     it('handles duplicate diastolic and heart rate values via positional order', () => {
-      expect(parseBPText('120\n80\n80')).toEqual({
+      const result = parseBPText('120\n80\n80');
+      expect(result).toEqual(expect.objectContaining({
         systolic: '120', diastolic: '80', heartRate: '80',
-      });
+      }));
+      expect(result.strategy).toBe(3);
     });
   });
 });
