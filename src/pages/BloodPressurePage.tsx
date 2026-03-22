@@ -12,7 +12,8 @@ import {
   getBPNormalDescKey,
 } from '@/lib/bloodPressure';
 import { getSharedWithMe } from '@/lib/sharing';
-import { parseBPText } from '@/lib/ocrParser';
+import { parseBPText, type ParsedBPData } from '@/lib/ocrParser';
+import { useTestingMode } from '@/contexts/TestingModeContext';
 import CameraCapture from '@/components/CameraCapture';
 import type { BloodPressureRecord, BloodPressureFormData, BPCategory, Gender, ShareRecord } from '@/types';
 import type { TranslationKeys } from '@/i18n';
@@ -136,6 +137,7 @@ export default function BloodPressurePage() {
   const { user } = useAuth();
   const { t, language } = useLanguage();
   const { isDark } = useTheme();
+  const { isTestingMode } = useTestingMode();
 
   const [records, setRecords] = useState<BloodPressureRecord[]>([]);
   const [sharedWithMe, setSharedWithMe] = useState<ShareRecord[]>([]);
@@ -152,6 +154,8 @@ export default function BloodPressurePage() {
   const [userGender, setUserGender] = useState<Gender>('unspecified');
   const [showCamera, setShowCamera] = useState(false);
   const [ocrFilled, setOcrFilled] = useState(false);
+  const [ocrDebugText, setOcrDebugText] = useState<string>('');
+  const [ocrDebugParsed, setOcrDebugParsed] = useState<ParsedBPData | null>(null);
 
   // Form state
   const [formData, setFormData] = useState<BloodPressureFormData>({
@@ -232,6 +236,10 @@ export default function BloodPressurePage() {
       }));
       if (parsed.systolic || parsed.diastolic || parsed.heartRate) {
         setOcrFilled(true);
+      }
+      if (isTestingMode) {
+        setOcrDebugText(text);
+        setOcrDebugParsed(parsed);
       }
     } catch (err) {
       console.error('Error parsing BP text:', err);
@@ -832,6 +840,18 @@ export default function BloodPressurePage() {
                 <div className={`flex items-center gap-2 text-sm p-3 rounded-lg ${isDark ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-green-700'}`}>
                   <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
                   {t('ocrFieldsFilled')}
+                </div>
+              )}
+
+              {/* OCR Debug Info (testing mode only) */}
+              {isTestingMode && ocrDebugParsed && (
+                <div className={`text-xs p-3 rounded-lg space-y-2 ${isDark ? 'bg-orange-900/20 text-orange-300 border border-orange-800' : 'bg-orange-50 text-orange-800 border border-orange-200'}`}>
+                  <div className="font-semibold flex items-center gap-1">
+                    🧪 {t('ocrStrategy')}: {ocrDebugParsed.strategy ?? 'N/A'}
+                  </div>
+                  <div className="font-semibold">{t('ocrRawText')}:</div>
+                  <pre className="whitespace-pre-wrap break-all max-h-32 overflow-y-auto">{ocrDebugText}</pre>
+                  <div>SYS: {ocrDebugParsed.systolic || '—'} | DIA: {ocrDebugParsed.diastolic || '—'} | HR: {ocrDebugParsed.heartRate || '—'}</div>
                 </div>
               )}
 

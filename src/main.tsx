@@ -5,13 +5,16 @@ import App from './App'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { LanguageProvider } from '@/contexts/LanguageContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
+import { TestingModeProvider } from '@/contexts/TestingModeContext'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider>
       <LanguageProvider>
         <AuthProvider>
-          <App />
+          <TestingModeProvider>
+            <App />
+          </TestingModeProvider>
         </AuthProvider>
       </LanguageProvider>
     </ThemeProvider>

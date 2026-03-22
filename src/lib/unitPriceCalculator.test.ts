@@ -98,15 +98,15 @@ describe('unitPriceCalculator', () => {
 
     it('returns empty array when items have no valid data', () => {
       const items: UnitPriceItem[] = [
-        { id: '1', name: 'A', price: '', quantity: '', unit: 'g' },
-        { id: '2', name: 'B', price: '0', quantity: '100', unit: 'g' },
+        { id: '1', name: 'A', price: '', quantity: '', unit: 'g', itemCount: '1' },
+        { id: '2', name: 'B', price: '0', quantity: '100', unit: 'g', itemCount: '1' },
       ];
       expect(calculateUnitPrices(items)).toEqual([]);
     });
 
     it('calculates unit price correctly for grams', () => {
       const items: UnitPriceItem[] = [
-        { id: '1', name: 'Product A', price: '10', quantity: '500', unit: 'g' },
+        { id: '1', name: 'Product A', price: '10', quantity: '500', unit: 'g', itemCount: '1' },
       ];
       const results = calculateUnitPrices(items);
       expect(results).toHaveLength(1);
@@ -115,8 +115,8 @@ describe('unitPriceCalculator', () => {
 
     it('identifies the best deal among same-type units', () => {
       const items: UnitPriceItem[] = [
-        { id: '1', name: 'Cheap', price: '10', quantity: '1', unit: 'kg' },
-        { id: '2', name: 'Expensive', price: '20', quantity: '1', unit: 'kg' },
+        { id: '1', name: 'Cheap', price: '10', quantity: '1', unit: 'kg', itemCount: '1' },
+        { id: '2', name: 'Expensive', price: '20', quantity: '1', unit: 'kg', itemCount: '1' },
       ];
       const results = calculateUnitPrices(items);
       expect(results).toHaveLength(2);
@@ -129,8 +129,8 @@ describe('unitPriceCalculator', () => {
 
     it('compares across different weight units correctly', () => {
       const items: UnitPriceItem[] = [
-        { id: '1', name: 'By kg', price: '50', quantity: '1', unit: 'kg' },
-        { id: '2', name: 'By catty', price: '40', quantity: '1', unit: 'catty' },
+        { id: '1', name: 'By kg', price: '50', quantity: '1', unit: 'kg', itemCount: '1' },
+        { id: '2', name: 'By catty', price: '40', quantity: '1', unit: 'catty', itemCount: '1' },
       ];
       const results = calculateUnitPrices(items);
 
@@ -143,8 +143,8 @@ describe('unitPriceCalculator', () => {
 
     it('does not compare across different unit types', () => {
       const items: UnitPriceItem[] = [
-        { id: '1', name: 'Weight item', price: '10', quantity: '100', unit: 'g' },
-        { id: '2', name: 'Count item', price: '5', quantity: '1', unit: 'piece' },
+        { id: '1', name: 'Weight item', price: '10', quantity: '100', unit: 'g', itemCount: '1' },
+        { id: '2', name: 'Count item', price: '5', quantity: '1', unit: 'piece', itemCount: '1' },
       ];
       const results = calculateUnitPrices(items);
       // Both should be best deal in their respective groups
@@ -154,13 +154,31 @@ describe('unitPriceCalculator', () => {
 
     it('skips items with missing quantity or price', () => {
       const items: UnitPriceItem[] = [
-        { id: '1', name: 'Valid', price: '10', quantity: '100', unit: 'g' },
-        { id: '2', name: 'Missing qty', price: '10', quantity: '', unit: 'g' },
-        { id: '3', name: 'Missing price', price: '', quantity: '100', unit: 'g' },
+        { id: '1', name: 'Valid', price: '10', quantity: '100', unit: 'g', itemCount: '1' },
+        { id: '2', name: 'Missing qty', price: '10', quantity: '', unit: 'g', itemCount: '1' },
+        { id: '3', name: 'Missing price', price: '', quantity: '100', unit: 'g', itemCount: '1' },
       ];
       const results = calculateUnitPrices(items);
       expect(results).toHaveLength(1);
       expect(results[0].id).toBe('1');
+    });
+
+    it('accounts for itemCount in unit price calculation', () => {
+      const items: UnitPriceItem[] = [
+        { id: '1', name: 'Single', price: '10', quantity: '100', unit: 'g', itemCount: '1' },
+        { id: '2', name: 'Pack of 3', price: '25', quantity: '100', unit: 'g', itemCount: '3' },
+      ];
+      const results = calculateUnitPrices(items);
+      expect(results).toHaveLength(2);
+
+      // Single: 10 / (100g * 1) = 0.1/g
+      // Pack of 3: 25 / (100g * 3) = 25/300 ≈ 0.0833/g → cheaper
+      const single = results.find((r) => r.id === '1');
+      const pack = results.find((r) => r.id === '2');
+      expect(single?.pricePerGram).toBeCloseTo(0.1, 4);
+      expect(pack?.pricePerGram).toBeCloseTo(0.0833, 4);
+      expect(pack?.isBestDeal).toBe(true);
+      expect(single?.isBestDeal).toBe(false);
     });
   });
 

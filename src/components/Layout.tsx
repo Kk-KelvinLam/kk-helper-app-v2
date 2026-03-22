@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useTestingMode } from '@/contexts/TestingModeContext';
 import { languageNames, type Language } from '@/i18n';
-import { ShoppingBag, TrendingUp, Calculator, LogOut, User, Moon, Sun, Globe, Settings, X, UserCircle, Heart } from 'lucide-react';
+import { ShoppingBag, TrendingUp, Calculator, LogOut, User, Moon, Sun, Globe, Settings, X, UserCircle, Heart, FlaskConical } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -15,6 +16,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
   const { user, signOut } = useAuth();
   const { language, setLanguage, t } = useLanguage();
   const { isDark, toggleTheme } = useTheme();
+  const { isTestingMode, canEnableTestingMode, toggleTestingMode } = useTestingMode();
   const [showSettings, setShowSettings] = useState(false);
 
   return (
@@ -85,17 +87,19 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
             <ShoppingBag className="w-5 h-5" />
             <span className="text-xs font-medium">{t('navRecords')}</span>
           </button>
-          <button
-            onClick={() => onNavigate('market')}
-            className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${
-              currentPage === 'market'
-                ? 'text-indigo-600 dark:text-indigo-400'
-                : isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
-            }`}
-          >
-            <TrendingUp className="w-5 h-5" />
-            <span className="text-xs font-medium">{t('navMarket')}</span>
-          </button>
+          {isTestingMode && (
+            <button
+              onClick={() => onNavigate('market')}
+              className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${
+                currentPage === 'market'
+                  ? 'text-indigo-600 dark:text-indigo-400'
+                  : isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              <TrendingUp className="w-5 h-5" />
+              <span className="text-xs font-medium">{t('navMarket')}</span>
+            </button>
+          )}
           <button
             onClick={() => onNavigate('calculator')}
             className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${
@@ -199,6 +203,35 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
                   />
                 </button>
               </div>
+
+              {/* Testing Mode Setting (only for authorized user) */}
+              {canEnableTestingMode && (
+                <div className={`flex items-center justify-between p-3 rounded-xl ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                  <div className="flex items-center gap-3">
+                    <FlaskConical className={`w-5 h-5 ${isTestingMode ? 'text-orange-500' : isDark ? 'text-gray-400' : 'text-gray-500'}`} />
+                    <div>
+                      <span className={`text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
+                        {t('testingMode')}
+                      </span>
+                      <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                        {t('testingModeHint')}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={toggleTestingMode}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      isTestingMode ? 'bg-orange-500' : 'bg-gray-300'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        isTestingMode ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

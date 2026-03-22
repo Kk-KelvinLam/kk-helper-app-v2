@@ -5,6 +5,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { addPurchase } from '@/lib/purchases';
 import { CATEGORIES, LOCATIONS, type PurchaseFormData } from '@/types';
 import { parseReceiptText } from '@/lib/ocrParser';
+import { useTestingMode } from '@/contexts/TestingModeContext';
 import CameraCapture from './CameraCapture';
 import { X, Camera, Loader2, CheckCircle2 } from 'lucide-react';
 
@@ -17,6 +18,7 @@ export default function AddRecordModal({ onClose, onSaved }: AddRecordModalProps
   const { user } = useAuth();
   const { t } = useLanguage();
   const { isDark } = useTheme();
+  const { isTestingMode } = useTestingMode();
   const [saving, setSaving] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [ocrFilled, setOcrFilled] = useState(false);
@@ -173,19 +175,21 @@ export default function AddRecordModal({ onClose, onSaved }: AddRecordModalProps
               </div>
             )}
 
-            {/* Camera Button */}
-            <button
-              type="button"
-              onClick={() => setShowCamera(true)}
-              className={`w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-dashed transition-colors ${
-                isDark
-                  ? 'border-gray-600 text-gray-400 hover:border-indigo-500 hover:text-indigo-400 hover:bg-indigo-900/20'
-                  : 'border-gray-300 text-gray-500 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50'
-              }`}
-            >
-              <Camera className="w-5 h-5" />
-              {t('scanReceipt')}
-            </button>
+            {/* Camera Button (testing mode only) */}
+            {isTestingMode && (
+              <button
+                type="button"
+                onClick={() => setShowCamera(true)}
+                className={`w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-dashed transition-colors ${
+                  isDark
+                    ? 'border-gray-600 text-gray-400 hover:border-indigo-500 hover:text-indigo-400 hover:bg-indigo-900/20'
+                    : 'border-gray-300 text-gray-500 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50'
+                }`}
+              >
+                <Camera className="w-5 h-5" />
+                {t('scanReceipt')}
+              </button>
+            )}
 
             {/* Submit */}
             <button
