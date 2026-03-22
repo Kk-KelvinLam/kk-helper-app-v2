@@ -17,7 +17,6 @@ export function TestingModeProvider({ children }: { children: ReactNode }) {
   const canEnableTestingMode = user?.email === TESTING_MODE_EMAIL;
 
   const [isTestingMode, setIsTestingMode] = useState(() => {
-    if (!canEnableTestingMode) return false;
     return localStorage.getItem(STORAGE_KEY) === 'true';
   });
 

@@ -81,9 +81,8 @@ export function calculateUnitPrices(items: UnitPriceItem[]): UnitPriceResult[] {
   const results: UnitPriceResult[] = validItems.map((item) => {
     const price = parseFloat(item.price);
     const quantity = parseFloat(item.quantity);
-    const itemCount = item.itemCount ? parseFloat(item.itemCount) : 1;
-    const effectiveCount = itemCount > 0 ? itemCount : 1;
-    const baseAmount = convertToBase(quantity, item.unit) * effectiveCount;
+    const itemCount = parseFloat(item.itemCount || '1') || 1;
+    const baseAmount = convertToBase(quantity, item.unit) * itemCount;
     const pricePerGram = price / baseAmount;
 
     return {

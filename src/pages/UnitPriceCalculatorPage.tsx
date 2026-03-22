@@ -130,9 +130,9 @@ export default function UnitPriceCalculatorPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {/* Product Name */}
-              <div className="col-span-3">
+              <div className="col-span-2 sm:col-span-3">
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -214,7 +214,7 @@ export default function UnitPriceCalculatorPage() {
                     placeholder="0"
                     value={item.quantity}
                     onChange={(e) => updateItem(item.id, 'quantity', e.target.value)}
-                    className={`flex-1 min-w-0 px-2 py-2 rounded-lg border text-sm outline-none transition-all ${
+                    className={`flex-1 min-w-0 px-3 py-2 rounded-lg border text-sm outline-none transition-all ${
                       isDark
                         ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent'
                         : 'border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent'
