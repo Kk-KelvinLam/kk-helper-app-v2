@@ -60,6 +60,13 @@ export async function preprocessBPImageWithSteps(dataUrl: string): Promise<{
 /** Minimum width (px) before scaling up — Tesseract benefits from higher res. */
 const MIN_WIDTH = 800;
 
+/**
+ * Minimum fraction of the image that must be removed on at least one axis
+ * for cropping to take effect.  Prevents unnecessary crops when the image
+ * is already tightly framed.
+ */
+const MIN_CROP_FRACTION = 0.15;
+
 async function preprocessBPImageCore(
   dataUrl: string,
   collectSteps: boolean,
@@ -197,7 +204,8 @@ async function preprocessBPImageCore(
  * closely approximates the screen bounding box.
  *
  * Returns the crop rectangle, or `null` if the image already appears
- * tightly framed (crop would remove < 15 % on both axes).
+ * tightly framed (crop would remove less than `MIN_CROP_FRACTION` on
+ * both axes).
  */
 function detectScreenRegion(
   data: Uint8ClampedArray,
@@ -220,14 +228,15 @@ function detectScreenRegion(
   }
 
   // Normalise to per-pixel average.
-  for (let y = 0; y < height; y++) rowEdge[y] /= width || 1;
-  for (let x = 0; x < width; x++) colEdge[x] /= height || 1;
+  for (let y = 0; y < height; y++) rowEdge[y] /= width;
+  for (let x = 0; x < width; x++) colEdge[x] /= height;
 
   const rowRange = findContentRange(rowEdge, height);
   const colRange = findContentRange(colEdge, width);
   if (!rowRange || !colRange) return null;
 
   // Add 10 % padding so labels adjacent to digits are not clipped.
+  // colRange.end / rowRange.end are inclusive indices, so +1 for width/height.
   const rw = colRange.end - colRange.start;
   const rh = rowRange.end - rowRange.start;
   const px = Math.floor(rw * 0.1);
@@ -238,8 +247,9 @@ function detectScreenRegion(
   const w = Math.min(width, colRange.end + px + 1) - x;
   const h = Math.min(height, rowRange.end + py + 1) - y;
 
-  // Only crop if region is meaningfully smaller than full image.
-  if (w >= width * 0.85 && h >= height * 0.85) return null;
+  // Only crop if region is meaningfully smaller than full image
+  // (at least MIN_CROP_FRACTION removed on one axis).
+  if (w >= width * (1 - MIN_CROP_FRACTION) && h >= height * (1 - MIN_CROP_FRACTION)) return null;
 
   return { x, y, w, h };
 }
