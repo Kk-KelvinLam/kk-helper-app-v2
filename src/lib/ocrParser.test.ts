@@ -360,6 +360,38 @@ describe('ocrParser', () => {
       expect(result.strategy).toBe(1);
     });
 
+    it('extracts Cofoe KF-65B style (高压/低压/脉搏 with units)', () => {
+      const result = parseBPText('高压 114 kPa\n低压 67 mmHg\n脉搏 83 搏/分');
+      expect(result).toEqual(expect.objectContaining({
+        systolic: '114', diastolic: '67', heartRate: '83',
+      }));
+      expect(result.strategy).toBe(1);
+    });
+
+    it('extracts when unit 搏/分 appears between label and number', () => {
+      const result = parseBPText('高压 kPa 114\n低压 mmHg 67\n脉搏 搏/分 83');
+      expect(result).toEqual(expect.objectContaining({
+        systolic: '114', diastolic: '67', heartRate: '83',
+      }));
+      expect(result.strategy).toBe(1);
+    });
+
+    it('extracts with OCR misread 脉博 (博 instead of 搏)', () => {
+      const result = parseBPText('高压 130\n低压 85\n脉博 68');
+      expect(result).toEqual(expect.objectContaining({
+        systolic: '130', diastolic: '85', heartRate: '68',
+      }));
+      expect(result.strategy).toBe(1);
+    });
+
+    it('extracts with 次/分 pulse unit', () => {
+      const result = parseBPText('高压 120\n低压 80\n心率 次/分 72');
+      expect(result).toEqual(expect.objectContaining({
+        systolic: '120', diastolic: '80', heartRate: '72',
+      }));
+      expect(result.strategy).toBe(1);
+    });
+
     it('extracts from three standalone numbers', () => {
       const result = parseBPText('120\n80\n72');
       expect(result).toEqual(expect.objectContaining({

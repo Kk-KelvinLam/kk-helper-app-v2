@@ -296,7 +296,7 @@ export function parseBPText(text: string): ParsedBPData {
     /(?:DIA(?:STOLIC)?|下壓|下压|舒張壓?|舒张压?|舒張|舒张|低压)[.:\s]*(?:mm\s*Hg|kPa)?\s*(\d{2,3})/i,
   );
   const pulMatch = normalized.match(
-    /(?:PUL(?:SE)?|HR|HEART\s*RATE|PR|脈搏|脉搏|心跳|脈率|脉率|心率)[.:\s]*(?:\/min|bpm)?\s*(\d{2,3})/i,
+    /(?:PUL(?:SE)?|HR|HEART\s*RATE|PR|脈搏|脉搏|脉博|心跳|脈率|脉率|心率)[.:\s]*(?:\/min|bpm|搏\s*[/／]\s*分|次\s*[/／]\s*分)?\s*(\d{2,3})/i,
   );
 
   if (sysMatch) result.systolic = sysMatch[1];
@@ -333,7 +333,7 @@ export function parseBPText(text: string): ParsedBPData {
       }
       if (!result.heartRate) {
         const pulMatch2 = normalized.match(
-          /(?:PUL(?:SE)?|HR|PR|脈搏|脉搏|心跳|脈率|脉率|心率)[.:\s]*(\d{2,3})/i,
+          /(?:PUL(?:SE)?|HR|PR|脈搏|脉搏|脉博|心跳|脈率|脉率|心率)[.:\s]*(?:\/min|bpm|搏\s*[/／]\s*分|次\s*[/／]\s*分)?\s*(\d{2,3})/i,
         );
         if (pulMatch2) result.heartRate = pulMatch2[1];
       }
