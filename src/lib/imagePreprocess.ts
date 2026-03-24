@@ -7,13 +7,16 @@
  * Preprocessing converts the image to a high-contrast black-on-white bitmap
  * so Tesseract can recognise the text more reliably.
  *
- * Pipeline (v2 — improved for LCD 7-segment displays):
+ * Pipeline (v3 — with LCD screen cropping):
  * 1. Scale up small images for better OCR resolution.
  * 2. Extract the green channel (best contrast for green-tinted LCD panels).
- * 3. Contrast stretching with percentile clipping (robust to outliers).
- * 4. Adaptive binarisation via Otsu's method.
- * 5. Morphological closing (dilate → erode) to fill segment gaps.
- * 6. Inversion check — ensure dark text on white background.
+ * 3. Detect and crop to the LCD screen region (reduces noise from device
+ *    body, table, and other background elements so that subsequent steps
+ *    operate on a cleaner histogram).
+ * 4. Contrast stretching with percentile clipping (robust to outliers).
+ * 5. Adaptive binarisation via Otsu's method.
+ * 6. Morphological closing (dilate → erode) to fill segment gaps.
+ * 7. Inversion check — ensure dark text on white background.
  */
 
 // ---------------------------------------------------------------------------
@@ -66,8 +69,8 @@ async function preprocessBPImageCore(
 
   // Scale up small images for better OCR accuracy
   const scale = img.width < MIN_WIDTH ? Math.ceil(MIN_WIDTH / img.width) : 1;
-  const width = img.width * scale;
-  const height = img.height * scale;
+  let width = img.width * scale;
+  let height = img.height * scale;
 
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -85,8 +88,8 @@ async function preprocessBPImageCore(
     steps.push({ label: 'Original', dataUrl: canvas.toDataURL('image/png') });
   }
 
-  const imageData = ctx.getImageData(0, 0, width, height);
-  const { data } = imageData;
+  let imageData = ctx.getImageData(0, 0, width, height);
+  let data = imageData.data;
 
   // --- Step 1: Green channel extraction ---
   // LCD panels are typically green-tinted; the green channel provides the best
@@ -101,7 +104,28 @@ async function preprocessBPImageCore(
     steps.push({ label: 'Green Channel', dataUrl: canvas.toDataURL('image/png') });
   }
 
-  // --- Step 2: Contrast stretching with percentile clipping ---
+  // --- Step 2: Detect and crop to LCD screen region ---
+  // Removing the surrounding device body / table from the image prevents
+  // bright background pixels from skewing the Otsu threshold, which
+  // previously caused the LCD area to turn entirely dark.
+  const region = detectScreenRegion(data, width, height);
+  if (region) {
+    ctx.putImageData(imageData, 0, 0);
+    const croppedImageData = ctx.getImageData(region.x, region.y, region.w, region.h);
+    canvas.width = region.w;
+    canvas.height = region.h;
+    width = region.w;
+    height = region.h;
+    ctx.putImageData(croppedImageData, 0, 0);
+    imageData = croppedImageData;
+    data = imageData.data;
+
+    if (collectSteps) {
+      steps.push({ label: 'Screen Crop', dataUrl: canvas.toDataURL('image/png') });
+    }
+  }
+
+  // --- Step 3: Contrast stretching with percentile clipping ---
   applyContrastStretch(data, 1);
 
   if (collectSteps) {
@@ -109,7 +133,7 @@ async function preprocessBPImageCore(
     steps.push({ label: 'Contrast Stretched', dataUrl: canvas.toDataURL('image/png') });
   }
 
-  // --- Step 3: Otsu's adaptive binarisation ---
+  // --- Step 4: Otsu's adaptive binarisation ---
   const threshold = computeOtsuThreshold(data);
   for (let i = 0; i < data.length; i += 4) {
     const bw = data[i] < threshold ? 0 : 255;
@@ -121,7 +145,7 @@ async function preprocessBPImageCore(
     steps.push({ label: `Binarised (Otsu t=${threshold})`, dataUrl: canvas.toDataURL('image/png') });
   }
 
-  // --- Step 4: Morphological closing (dilate then erode, 3×3 kernel) ---
+  // --- Step 5: Morphological closing (dilate then erode, 3×3 kernel) ---
   // Fills tiny gaps between LCD segments so digits appear solid to Tesseract.
   morphDilate(data, width, height);
   morphErode(data, width, height);
@@ -131,7 +155,7 @@ async function preprocessBPImageCore(
     steps.push({ label: 'Morph. Closing', dataUrl: canvas.toDataURL('image/png') });
   }
 
-  // --- Step 5: Inversion check ---
+  // --- Step 6: Inversion check ---
   // Tesseract expects dark text on a white background.  If more than half the
   // pixels are dark, the polarity is wrong and we invert.
   let darkCount = 0;
@@ -162,6 +186,110 @@ async function preprocessBPImageCore(
 // ---------------------------------------------------------------------------
 // Image processing helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Detect the LCD screen region using edge-density projection.
+ *
+ * Rows and columns crossing digit segments exhibit high gradient sums,
+ * while rows/columns outside the screen (device body, table) have low
+ * gradients.  We smooth the per-row / per-column gradient profiles and
+ * pick the contiguous range that exceeds a fraction of the peak — this
+ * closely approximates the screen bounding box.
+ *
+ * Returns the crop rectangle, or `null` if the image already appears
+ * tightly framed (crop would remove < 15 % on both axes).
+ */
+function detectScreenRegion(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+): { x: number; y: number; w: number; h: number } | null {
+  // Build per-row and per-column edge-density profiles.
+  const rowEdge = new Float64Array(height);
+  const colEdge = new Float64Array(width);
+
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const idx = (y * width + x) * 4;
+      const gx = Math.abs(data[idx] - data[(y * width + (x - 1)) * 4]);
+      const gy = Math.abs(data[idx] - data[((y - 1) * width + x) * 4]);
+      const g = Math.max(gx, gy);
+      rowEdge[y] += g;
+      colEdge[x] += g;
+    }
+  }
+
+  // Normalise to per-pixel average.
+  for (let y = 0; y < height; y++) rowEdge[y] /= width || 1;
+  for (let x = 0; x < width; x++) colEdge[x] /= height || 1;
+
+  const rowRange = findContentRange(rowEdge, height);
+  const colRange = findContentRange(colEdge, width);
+  if (!rowRange || !colRange) return null;
+
+  // Add 10 % padding so labels adjacent to digits are not clipped.
+  const rw = colRange.end - colRange.start;
+  const rh = rowRange.end - rowRange.start;
+  const px = Math.floor(rw * 0.1);
+  const py = Math.floor(rh * 0.1);
+
+  const x = Math.max(0, colRange.start - px);
+  const y = Math.max(0, rowRange.start - py);
+  const w = Math.min(width, colRange.end + px + 1) - x;
+  const h = Math.min(height, rowRange.end + py + 1) - y;
+
+  // Only crop if region is meaningfully smaller than full image.
+  if (w >= width * 0.85 && h >= height * 0.85) return null;
+
+  return { x, y, w, h };
+}
+
+/**
+ * Given a 1-D edge-density profile, return the start/end indices of the
+ * primary content region.
+ *
+ * 1. Smooth with a small moving-average window (2 % of `size`).
+ * 2. Set threshold at 20 % of the smoothed peak.
+ * 3. Return the first and last indices that exceed the threshold.
+ */
+function findContentRange(
+  profile: Float64Array,
+  size: number,
+): { start: number; end: number } | null {
+  const win = Math.max(1, Math.floor(size * 0.02));
+  const smoothed = new Float64Array(size);
+  for (let i = 0; i < size; i++) {
+    let s = 0;
+    let c = 0;
+    const lo = Math.max(0, i - win);
+    const hi = Math.min(size - 1, i + win);
+    for (let j = lo; j <= hi; j++) {
+      s += profile[j];
+      c++;
+    }
+    smoothed[i] = s / c;
+  }
+
+  let maxV = 0;
+  for (let i = 0; i < size; i++) {
+    if (smoothed[i] > maxV) maxV = smoothed[i];
+  }
+  if (maxV === 0) return null;
+
+  const threshold = maxV * 0.2;
+
+  let start = -1;
+  let end = -1;
+  for (let i = 0; i < size; i++) {
+    if (smoothed[i] >= threshold) {
+      if (start === -1) start = i;
+      end = i;
+    }
+  }
+
+  if (start === -1) return null;
+  return { start, end };
+}
 
 /**
  * Contrast stretching with percentile clipping.
