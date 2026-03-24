@@ -232,6 +232,12 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
                   </button>
                 </div>
               )}
+
+              {/* App Version */}
+              <div className={`flex items-center justify-between px-3 pt-2 pb-1 border-t ${isDark ? 'border-gray-700' : 'border-gray-100'}`}>
+                <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{t('appVersion')}</span>
+                <span className={`text-xs font-mono ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>v{__APP_VERSION__}</span>
+              </div>
             </div>
           </div>
         </div>

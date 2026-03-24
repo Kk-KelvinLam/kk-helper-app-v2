@@ -120,6 +120,7 @@ const zhTW = {
   settings: '設定',
   testingMode: '測試模式',
   testingModeHint: '顯示 OCR 除錯資訊及實驗功能',
+  appVersion: '版本',
 
   // Profile & Sharing
   navProfile: '個人',
