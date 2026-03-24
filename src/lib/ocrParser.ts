@@ -309,6 +309,39 @@ export function normalizeBPText(raw: string): string {
   // } → 1 when adjacent to digits (LCD "1" can misread as brace)
   t = t.replace(/([0-9])[}](?=[0-9\s])/g, '$11');
   t = t.replace(/[}](?=[0-9])/g, '1');
+
+  // Seven-segment display (SSD) character misreads.
+  // LCD digit segments are often misinterpreted as letters by Tesseract.
+  // Apply corrections only when adjacent to a digit to avoid corrupting labels.
+
+  // b → 6 (SSD "6" resembles lowercase b)
+  t = t.replace(/([0-9])b(?=[0-9\s])/g, '$16');
+  t = t.replace(/b(?=[0-9])/g, '6');
+  // Z/z → 2 (SSD "2" has angular shape like Z)
+  t = t.replace(/([0-9])[Zz](?=[0-9\s])/g, '$12');
+  t = t.replace(/[Zz](?=[0-9])/g, '2');
+  // g → 9 (SSD "9" resembles lowercase g)
+  t = t.replace(/([0-9])g(?=[0-9\s])/g, '$19');
+  t = t.replace(/g(?=[0-9])/g, '9');
+  // q → 9 (SSD "9" resembles lowercase q)
+  t = t.replace(/([0-9])q(?=[0-9\s])/g, '$19');
+  t = t.replace(/q(?=[0-9])/g, '9');
+  // ! → 1 (SSD "1" can be misread as exclamation mark)
+  t = t.replace(/([0-9])!(?=[0-9\s])/g, '$11');
+  t = t.replace(/!(?=[0-9])/g, '1');
+  // [ and ] → 1 (SSD "1" can be misread as bracket)
+  t = t.replace(/([0-9])[\[\]](?=[0-9\s])/g, '$11');
+  t = t.replace(/[\[\]](?=[0-9])/g, '1');
+
+  // The following SSD substitutions apply only when the letter is sandwiched
+  // between two digits, to avoid corrupting labels (SYS, BPM, DIA, etc.).
+  // S/s → 5 (SSD "5" looks like S)
+  t = t.replace(/([0-9])[Ss](?=[0-9])/g, '$15');
+  // B → 8 (SSD "8" looks like B)
+  t = t.replace(/([0-9])B(?=[0-9])/g, '$18');
+  // D → 0 (SSD "0" looks like D)
+  t = t.replace(/([0-9])D(?=[0-9])/g, '$10');
+
   // Remove periods/commas between consecutive digits — LCD segment artefacts;
   // BP values are always integers, never decimals.
   // Applied iteratively to handle chained cases like "1.1.4" → "114"
@@ -337,8 +370,14 @@ export function normalizeBPText(raw: string): string {
  * - Labeled (Chinese): "收縮壓 120 舒張壓 80 脈搏 72", "上壓 120 下壓 80 心跳 72"
  * - Slash format: "120/80", "120/80 72BPM"
  * - Numbers only: Three standalone numbers from a monitor display
+ *
+ * @param digitOnlyText — Optional text from a second Tesseract pass using a
+ *   digit-only character whitelist (`tessedit_char_whitelist='0123456789'`).
+ *   Seven-segment LCD digits are often misread as letters (e.g. 5→S, 6→b,
+ *   8→B) by general-purpose OCR; the digit-only pass avoids these errors.
+ *   When provided, this text is used for number extraction in Strategy 3.
  */
-export function parseBPText(text: string): ParsedBPData {
+export function parseBPText(text: string, digitOnlyText?: string): ParsedBPData {
   const result: ParsedBPData = { systolic: '', diastolic: '', heartRate: '' };
   const normalized = normalizeBPText(text);
   if (!normalized) return result;
@@ -422,11 +461,17 @@ export function parseBPText(text: string): ParsedBPData {
   }
 
   // --- Strategy 3: Number extraction (for BP monitor screens with just numbers) ---
-  // Check for BPM-tagged heart rate first
+  // Check for BPM-tagged heart rate first (always from the labelled text)
   const bpmMatch = normalized.match(/(\d{2,3})\s*BPM/i);
   if (bpmMatch) {
     result.heartRate = bpmMatch[1];
   }
+
+  // When a digit-only OCR pass is available, use it for number extraction.
+  // The digit-only pass is produced by Tesseract with
+  // tessedit_char_whitelist='0123456789', which prevents seven-segment LCD
+  // segments from being misinterpreted as letters (e.g. 5→S, 6→b, 8→B).
+  const numText = digitOnlyText ? normalizeBPText(digitOnlyText) : normalized;
 
   // Extract all 2-3 digit numbers in valid physiological ranges.
   // Use a non-digit boundary to avoid matching partial numbers
@@ -434,7 +479,7 @@ export function parseBPText(text: string): ParsedBPData {
   const allNumbers: number[] = [];
   const numRegex = /(^|[^\d])(\d{2,3})(?!\d)/g;
   let m: RegExpExecArray | null;
-  while ((m = numRegex.exec(normalized)) !== null) {
+  while ((m = numRegex.exec(numText)) !== null) {
     const n = parseInt(m[2]);
     if (n >= 30 && n <= 250) {
       allNumbers.push(n);
