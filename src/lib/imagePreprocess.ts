@@ -65,7 +65,7 @@ const MIN_WIDTH = 800;
  * for cropping to take effect.  Prevents unnecessary crops when the image
  * is already tightly framed.
  */
-const MIN_CROP_FRACTION = 0.15;
+const MIN_CROP_FRACTION = 0.05;
 
 async function preprocessBPImageCore(
   dataUrl: string,
@@ -277,8 +277,14 @@ function detectScreenRegion(
  * primary content region.
  *
  * 1. Smooth with a small moving-average window (2 % of `size`).
- * 2. Set threshold at 20 % of the smoothed peak.
- * 3. Return the first and last indices that exceed the threshold.
+ * 2. Set threshold at 30 % of the smoothed peak.
+ * 3. Find contiguous segments above the threshold, then return the segment
+ *    with the highest total edge mass.
+ *
+ * Using the densest contiguous segment (rather than the span from first to
+ * last above-threshold point) prevents isolated edge peaks — such as the
+ * device-body boundary against a dark background — from inflating the
+ * detected region to span the entire image.
  */
 function findContentRange(
   profile: Float64Array,
@@ -304,19 +310,40 @@ function findContentRange(
   }
   if (maxV === 0) return null;
 
-  const threshold = maxV * 0.2;
+  const threshold = maxV * 0.3;
 
-  let start = -1;
-  let end = -1;
+  // Find the densest contiguous segment above threshold.
+  let bestStart = -1;
+  let bestEnd = -1;
+  let bestMass = 0;
+
+  let segStart = -1;
+  let segMass = 0;
+
   for (let i = 0; i < size; i++) {
     if (smoothed[i] >= threshold) {
-      if (start === -1) start = i;
-      end = i;
+      if (segStart === -1) segStart = i;
+      segMass += smoothed[i];
+    } else {
+      if (segStart !== -1) {
+        if (segMass > bestMass) {
+          bestStart = segStart;
+          bestEnd = i - 1;
+          bestMass = segMass;
+        }
+        segStart = -1;
+        segMass = 0;
+      }
     }
   }
+  // Handle segment that extends to the end.
+  if (segStart !== -1 && segMass > bestMass) {
+    bestStart = segStart;
+    bestEnd = size - 1;
+  }
 
-  if (start === -1) return null;
-  return { start, end };
+  if (bestStart === -1) return null;
+  return { start: bestStart, end: bestEnd };
 }
 
 /**
