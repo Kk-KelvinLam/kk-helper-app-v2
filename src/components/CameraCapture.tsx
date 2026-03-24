@@ -14,11 +14,13 @@ interface CameraCaptureProps {
   ocrLanguage?: string;
   /** Optional image preprocessor applied before OCR (e.g. contrast enhancement for LCD displays). */
   preprocessImage?: (dataUrl: string) => Promise<string>;
+  /** Optional Tesseract worker parameters (e.g. PSM mode). When provided, uses a worker instead of the simple API. */
+  ocrParams?: Record<string, string>;
 }
 
 type CameraState = 'idle' | 'streaming' | 'preview';
 
-export default function CameraCapture({ onTextExtracted, onImageCaptured, onClose, title, hint, ocrLanguage, preprocessImage }: CameraCaptureProps) {
+export default function CameraCapture({ onTextExtracted, onImageCaptured, onClose, title, hint, ocrLanguage, preprocessImage, ocrParams }: CameraCaptureProps) {
   const { t } = useLanguage();
   const { isDark } = useTheme();
   const [cameraState, setCameraState] = useState<CameraState>('idle');
@@ -116,8 +118,21 @@ export default function CameraCapture({ onTextExtracted, onImageCaptured, onClos
     try {
       // Optionally preprocess the image (e.g. contrast enhancement for LCD displays)
       const ocrInput = preprocessImage ? await preprocessImage(imagePreview) : imagePreview;
-      const result = await Tesseract.recognize(ocrInput, ocrLanguage || 'eng+chi_tra');
-      const text = result.data.text.trim();
+      const lang = ocrLanguage || 'eng+chi_tra';
+
+      let text: string;
+      if (ocrParams) {
+        // Use a Tesseract worker for fine-grained configuration (PSM mode, etc.)
+        const worker = await Tesseract.createWorker(lang);
+        await worker.setParameters(ocrParams);
+        const result = await worker.recognize(ocrInput);
+        text = result.data.text.trim();
+        await worker.terminate();
+      } else {
+        const result = await Tesseract.recognize(ocrInput, lang);
+        text = result.data.text.trim();
+      }
+
       if (onImageCaptured) {
         onImageCaptured(imagePreview);
       }

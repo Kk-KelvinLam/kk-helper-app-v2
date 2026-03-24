@@ -216,6 +216,7 @@ const en = {
   // OCR debug
   ocrRawText: 'OCR Raw Text',
   ocrStrategy: 'Strategy Used',
+  ocrPreprocessSteps: 'Preprocessing Steps',
 
   // Unit Price Calculator
   itemQuantityCount: 'Qty (pcs)',

@@ -305,6 +305,16 @@ export function normalizeBPText(raw: string): string {
   t = t.replace(/([0-9])O/g, '$10');
   t = t.replace(/O(?=[0-9])/g, '0');
 
+  // Additional LCD segment display misreads:
+  // } → 1 when adjacent to digits (LCD "1" can misread as brace)
+  t = t.replace(/([0-9])[}](?=[0-9\s])/g, '$11');
+  t = t.replace(/[}](?=[0-9])/g, '1');
+  // Remove periods/commas between consecutive digits — LCD segment artefacts;
+  // BP values are always integers, never decimals.
+  // Applied twice to handle chained cases like "1.1.4" → "11.4" → "114"
+  t = t.replace(/(\d)[.,](\d)/g, '$1$2');
+  t = t.replace(/(\d)[.,](\d)/g, '$1$2');
+
   // Remove stray non-meaningful characters that break digit sequences
   // (e.g. OCR inserting a dot, comma, or space between LCD segments)
   // Collapse multiple spaces

@@ -216,6 +216,7 @@ const zhTW = {
   // OCR debug
   ocrRawText: 'OCR 原始文字',
   ocrStrategy: '使用策略',
+  ocrPreprocessSteps: '影像前處理步驟',
 
   // Unit Price Calculator
   itemQuantityCount: '數量（件）',
