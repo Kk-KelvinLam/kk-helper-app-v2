@@ -118,6 +118,21 @@ async function preprocessBPImageCore(
   const region = detectScreenRegion(data, width, height);
   if (region) {
     ctx.putImageData(imageData, 0, 0);
+
+    if (collectSteps) {
+      // Draw crop-region overlay on the green-channel image so the user can
+      // see exactly where the algorithm decided to crop.
+      const overlayCanvas = document.createElement('canvas');
+      overlayCanvas.width = width;
+      overlayCanvas.height = height;
+      const overlayCtx = overlayCanvas.getContext('2d')!;
+      overlayCtx.drawImage(canvas, 0, 0);
+      overlayCtx.strokeStyle = 'red';
+      overlayCtx.lineWidth = Math.max(2, Math.round(Math.min(width, height) * 0.005));
+      overlayCtx.strokeRect(region.x, region.y, region.w, region.h);
+      steps.push({ label: 'Crop Region', dataUrl: overlayCanvas.toDataURL('image/png') });
+    }
+
     const croppedImageData = ctx.getImageData(region.x, region.y, region.w, region.h);
     canvas.width = region.w;
     canvas.height = region.h;
@@ -130,6 +145,9 @@ async function preprocessBPImageCore(
     if (collectSteps) {
       steps.push({ label: 'Screen Crop', dataUrl: canvas.toDataURL('image/png') });
     }
+  } else if (collectSteps) {
+    ctx.putImageData(imageData, 0, 0);
+    steps.push({ label: 'Screen Crop (skipped)', dataUrl: canvas.toDataURL('image/png') });
   }
 
   // --- Step 3: Contrast stretching with percentile clipping ---
