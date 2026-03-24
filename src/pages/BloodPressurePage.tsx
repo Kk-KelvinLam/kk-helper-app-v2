@@ -13,7 +13,7 @@ import {
 } from '@/lib/bloodPressure';
 import { getSharedWithMe } from '@/lib/sharing';
 import { parseBPText, type ParsedBPData } from '@/lib/ocrParser';
-import { preprocessBPImage } from '@/lib/imagePreprocess';
+import { preprocessBPImage, preprocessBPImageWithSteps, type PreprocessingStep } from '@/lib/imagePreprocess';
 import { useTestingMode } from '@/contexts/TestingModeContext';
 import CameraCapture from '@/components/CameraCapture';
 import type { BloodPressureRecord, BloodPressureFormData, BPCategory, Gender, ShareRecord } from '@/types';
@@ -157,6 +157,7 @@ export default function BloodPressurePage() {
   const [ocrFilled, setOcrFilled] = useState(false);
   const [ocrDebugText, setOcrDebugText] = useState<string>('');
   const [ocrDebugParsed, setOcrDebugParsed] = useState<ParsedBPData | null>(null);
+  const [preprocessSteps, setPreprocessSteps] = useState<PreprocessingStep[]>([]);
 
   // Form state
   const [formData, setFormData] = useState<BloodPressureFormData>({
@@ -251,6 +252,16 @@ export default function BloodPressurePage() {
   const handleBPImageCaptured = (imageDataUrl: string) => {
     setFormData((prev) => ({ ...prev, imageUrl: imageDataUrl }));
   };
+
+  /** Wrap preprocessBPImage to capture intermediate step images in testing mode. */
+  const handlePreprocess = useCallback(async (dataUrl: string): Promise<string> => {
+    if (isTestingMode) {
+      const { result, steps } = await preprocessBPImageWithSteps(dataUrl);
+      setPreprocessSteps(steps);
+      return result;
+    }
+    return preprocessBPImage(dataUrl);
+  }, [isTestingMode]);
 
   const handleSave = async () => {
     if (!user || !formData.systolic || !formData.diastolic || !formData.heartRate) return;
@@ -856,6 +867,29 @@ export default function BloodPressurePage() {
                 </div>
               )}
 
+              {/* Preprocessing Steps Debug (testing mode only) */}
+              {isTestingMode && preprocessSteps.length > 0 && (
+                <div className={`text-xs p-3 rounded-lg space-y-2 ${isDark ? 'bg-blue-900/20 text-blue-300 border border-blue-800' : 'bg-blue-50 text-blue-800 border border-blue-200'}`}>
+                  <div className="font-semibold flex items-center gap-1">
+                    🔬 {t('ocrPreprocessSteps')}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {preprocessSteps.map((step, idx) => (
+                      <div key={idx} className="space-y-1">
+                        <div className={`text-[10px] font-medium ${isDark ? 'text-blue-400' : 'text-blue-700'}`}>
+                          {idx + 1}. {step.label}
+                        </div>
+                        <img
+                          src={step.dataUrl}
+                          alt={step.label}
+                          className={`w-full rounded border object-contain max-h-28 ${isDark ? 'border-blue-800 bg-gray-900' : 'border-blue-200 bg-white'}`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Scan BP Monitor */}
               <button
                 type="button"
@@ -937,7 +971,8 @@ export default function BloodPressurePage() {
           title={t('bpScanReading')}
           hint={t('bpCaptureHint')}
           ocrLanguage="eng+chi_tra+chi_sim"
-          preprocessImage={preprocessBPImage}
+          preprocessImage={handlePreprocess}
+          ocrParams={{ tessedit_pageseg_mode: '6' }}
         />
       )}
     </div>

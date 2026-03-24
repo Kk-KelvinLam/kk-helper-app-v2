@@ -598,5 +598,19 @@ describe('ocrParser', () => {
     it('normalises CRLF to LF', () => {
       expect(normalizeBPText('120\r\n80')).toBe('120\n80');
     });
+
+    it('normalises } adjacent to digits to 1', () => {
+      expect(normalizeBPText('}14')).toBe('114');
+      expect(normalizeBPText('1}4')).toBe('114');
+    });
+
+    it('removes periods between consecutive digits (LCD artefact)', () => {
+      expect(normalizeBPText('1.1.4')).toBe('114');
+      expect(normalizeBPText('6.7')).toBe('67');
+    });
+
+    it('removes commas between consecutive digits (LCD artefact)', () => {
+      expect(normalizeBPText('1,14')).toBe('114');
+    });
   });
 });
