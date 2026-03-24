@@ -227,9 +227,9 @@ export default function BloodPressurePage() {
     setSaveError(null);
   };
 
-  const handleBPTextExtracted = (text: string) => {
+  const handleBPTextExtracted = (text: string, digitOnlyText?: string) => {
     try {
-      const parsed = parseBPText(text);
+      const parsed = parseBPText(text, digitOnlyText);
       setFormData((prev) => ({
         ...prev,
         systolic: parsed.systolic || prev.systolic,
@@ -240,7 +240,10 @@ export default function BloodPressurePage() {
         setOcrFilled(true);
       }
       if (isTestingMode) {
-        setOcrDebugText(text);
+        const debugText = digitOnlyText
+          ? `${text}\n\n--- Digit-only OCR ---\n${digitOnlyText}`
+          : text;
+        setOcrDebugText(debugText);
         setOcrDebugParsed(parsed);
       }
     } catch (err) {
@@ -973,6 +976,7 @@ export default function BloodPressurePage() {
           ocrLanguage="eng+chi_tra+chi_sim"
           preprocessImage={handlePreprocess}
           ocrParams={{ tessedit_pageseg_mode: '6' }}
+          ocrSecondPassParams={{ tessedit_pageseg_mode: '6', tessedit_char_whitelist: '0123456789' }}
         />
       )}
     </div>

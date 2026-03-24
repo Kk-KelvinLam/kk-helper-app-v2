@@ -5,7 +5,7 @@ import { Camera, Upload, X, Loader2 } from 'lucide-react';
 import Tesseract from 'tesseract.js';
 
 interface CameraCaptureProps {
-  onTextExtracted: (text: string) => void;
+  onTextExtracted: (text: string, digitOnlyText?: string) => void;
   onImageCaptured?: (imageDataUrl: string) => void;
   onClose: () => void;
   title?: string;
@@ -16,11 +16,19 @@ interface CameraCaptureProps {
   preprocessImage?: (dataUrl: string) => Promise<string>;
   /** Optional Tesseract worker parameters (e.g. PSM mode). When provided, uses a worker instead of the simple API. */
   ocrParams?: Record<string, string>;
+  /**
+   * Optional second-pass OCR parameters for digit-only recognition.
+   * When provided, runs a parallel Tesseract pass with 'eng' language and
+   * these params, then passes the result as the second argument to
+   * onTextExtracted.  Useful for seven-segment LCD displays where a
+   * digit-only whitelist improves accuracy.
+   */
+  ocrSecondPassParams?: Record<string, string>;
 }
 
 type CameraState = 'idle' | 'streaming' | 'preview';
 
-export default function CameraCapture({ onTextExtracted, onImageCaptured, onClose, title, hint, ocrLanguage, preprocessImage, ocrParams }: CameraCaptureProps) {
+export default function CameraCapture({ onTextExtracted, onImageCaptured, onClose, title, hint, ocrLanguage, preprocessImage, ocrParams, ocrSecondPassParams }: CameraCaptureProps) {
   const { t } = useLanguage();
   const { isDark } = useTheme();
   const [cameraState, setCameraState] = useState<CameraState>('idle');
@@ -120,23 +128,38 @@ export default function CameraCapture({ onTextExtracted, onImageCaptured, onClos
       const ocrInput = preprocessImage ? await preprocessImage(imagePreview) : imagePreview;
       const lang = ocrLanguage || 'eng+chi_tra';
 
-      let text: string;
-      if (ocrParams) {
-        // Use a Tesseract worker for fine-grained configuration (PSM mode, etc.)
-        const worker = await Tesseract.createWorker(lang);
-        await worker.setParameters(ocrParams);
-        const result = await worker.recognize(ocrInput);
-        text = result.data.text.trim();
-        await worker.terminate();
-      } else {
+      // Primary OCR pass (with full language support for label detection)
+      const primaryOcr = async (): Promise<string> => {
+        if (ocrParams) {
+          // Use a Tesseract worker for fine-grained configuration (PSM mode, etc.)
+          const worker = await Tesseract.createWorker(lang);
+          await worker.setParameters(ocrParams);
+          const result = await worker.recognize(ocrInput);
+          await worker.terminate();
+          return result.data.text.trim();
+        }
         const result = await Tesseract.recognize(ocrInput, lang);
-        text = result.data.text.trim();
-      }
+        return result.data.text.trim();
+      };
+
+      // Optional second pass with digit-only params (e.g. whitelist='0123456789').
+      // Runs in parallel with the primary pass for minimal additional latency.
+      // Uses 'eng' only — digit recognition is language-independent.
+      const secondaryOcr = async (): Promise<string | undefined> => {
+        if (!ocrSecondPassParams) return undefined;
+        const worker = await Tesseract.createWorker('eng');
+        await worker.setParameters(ocrSecondPassParams);
+        const result = await worker.recognize(ocrInput);
+        await worker.terminate();
+        return result.data.text.trim();
+      };
+
+      const [text, digitOnlyText] = await Promise.all([primaryOcr(), secondaryOcr()]);
 
       if (onImageCaptured) {
         onImageCaptured(imagePreview);
       }
-      onTextExtracted(text || t('noTextDetected'));
+      onTextExtracted(text || t('noTextDetected'), digitOnlyText);
     } catch {
       setError(t('imageProcessError'));
     } finally {

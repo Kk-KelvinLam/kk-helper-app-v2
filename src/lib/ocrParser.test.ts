@@ -612,5 +612,112 @@ describe('ocrParser', () => {
     it('removes commas between consecutive digits (LCD artefact)', () => {
       expect(normalizeBPText('1,14')).toBe('114');
     });
+
+    // --- Seven-segment display (SSD) character misread corrections ---
+
+    it('normalises b adjacent to digits to 6 (SSD misread)', () => {
+      expect(normalizeBPText('b7')).toBe('67');
+      expect(normalizeBPText('1b4')).toBe('164');
+    });
+
+    it('normalises Z/z adjacent to digits to 2 (SSD misread)', () => {
+      expect(normalizeBPText('1Z0')).toBe('120');
+      expect(normalizeBPText('z5')).toBe('25');
+    });
+
+    it('normalises g adjacent to digits to 9 (SSD misread)', () => {
+      expect(normalizeBPText('g3')).toBe('93');
+      expect(normalizeBPText('1g0')).toBe('190');
+    });
+
+    it('normalises q adjacent to digits to 9 (SSD misread)', () => {
+      expect(normalizeBPText('q2')).toBe('92');
+      expect(normalizeBPText('1q5')).toBe('195');
+    });
+
+    it('normalises ! adjacent to digits to 1 (SSD misread)', () => {
+      expect(normalizeBPText('!14')).toBe('114');
+      expect(normalizeBPText('1!4')).toBe('114');
+    });
+
+    it('normalises [ and ] adjacent to digits to 1 (SSD misread)', () => {
+      expect(normalizeBPText('[14')).toBe('114');
+      expect(normalizeBPText('1]4')).toBe('114');
+    });
+
+    it('normalises S between digits to 5 (SSD misread)', () => {
+      expect(normalizeBPText('1S4')).toBe('154');
+    });
+
+    it('does NOT convert S in labels (e.g. SYS stays SYS)', () => {
+      expect(normalizeBPText('SYS 120')).toBe('SYS 120');
+    });
+
+    it('normalises B between digits to 8 (SSD misread)', () => {
+      expect(normalizeBPText('1B4')).toBe('184');
+    });
+
+    it('does NOT convert B in labels (e.g. BPM stays BPM)', () => {
+      expect(normalizeBPText('72 BPM')).toBe('72 BPM');
+    });
+
+    it('normalises D between digits to 0 (SSD misread)', () => {
+      expect(normalizeBPText('1D0')).toBe('100');
+    });
+
+    it('does NOT convert D in labels (e.g. DIA stays DIA)', () => {
+      expect(normalizeBPText('DIA 80')).toBe('DIA 80');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  describe('parseBPText with digitOnlyText', () => {
+    it('uses digitOnlyText for Strategy 3 number extraction', () => {
+      // Regular text has SSD misreads, digit-only text is clean
+      const result = parseBPText('l34\n g3\n B7', '134\n 93\n 87');
+      expect(result).toEqual(expect.objectContaining({
+        systolic: '134', diastolic: '93', heartRate: '87',
+      }));
+      expect(result.strategy).toBe(3);
+    });
+
+    it('still uses regular text for Strategy 1 labels', () => {
+      const result = parseBPText('SYS 120 DIA 80 PUL 72', '120 80 72');
+      expect(result).toEqual(expect.objectContaining({
+        systolic: '120', diastolic: '80', heartRate: '72',
+      }));
+      expect(result.strategy).toBe(1);
+    });
+
+    it('still uses regular text for Strategy 2 slash format', () => {
+      const result = parseBPText('120/80 72BPM', '120 80 72');
+      expect(result).toEqual(expect.objectContaining({
+        systolic: '120', diastolic: '80', heartRate: '72',
+      }));
+      expect(result.strategy).toBe(2);
+    });
+
+    it('uses regular text for BPM detection in Strategy 3', () => {
+      // Regular text has BPM label, digit-only doesn't
+      const result = parseBPText('72 BPM\n120\n80', '72\n120\n80');
+      expect(result.heartRate).toBe('72');
+    });
+
+    it('falls back to regular text when digitOnlyText is not provided', () => {
+      const result = parseBPText('120\n80\n72');
+      expect(result).toEqual(expect.objectContaining({
+        systolic: '120', diastolic: '80', heartRate: '72',
+      }));
+      expect(result.strategy).toBe(3);
+    });
+
+    it('handles garbled regular text with clean digit-only text', () => {
+      // Simulates heavily garbled OCR from seven-segment display
+      const result = parseBPText('no valid numbers here', '135\n88\n72');
+      expect(result).toEqual(expect.objectContaining({
+        systolic: '135', diastolic: '88', heartRate: '72',
+      }));
+      expect(result.strategy).toBe(3);
+    });
   });
 });
