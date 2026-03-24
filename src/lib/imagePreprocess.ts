@@ -7,14 +7,13 @@
  * Preprocessing converts the image to a high-contrast black-on-white bitmap
  * so Tesseract can recognise the text more reliably.
  *
- * Pipeline (v3 — with LCD screen cropping):
+ * Pipeline (v4 — with LCD screen cropping + local adaptive binarisation):
  * 1. Scale up small images for better OCR resolution.
  * 2. Extract the green channel (best contrast for green-tinted LCD panels).
  * 3. Detect and crop to the LCD screen region (reduces noise from device
- *    body, table, and other background elements so that subsequent steps
- *    operate on a cleaner histogram).
+ *    body, table, and other background elements).
  * 4. Contrast stretching with percentile clipping (robust to outliers).
- * 5. Adaptive binarisation via Otsu's method.
+ * 5. Local adaptive binarisation (integral-image local mean).
  * 6. Morphological closing (dilate → erode) to fill segment gaps.
  * 7. Inversion check — ensure dark text on white background.
  */
@@ -65,7 +64,7 @@ const MIN_WIDTH = 800;
  * for cropping to take effect.  Prevents unnecessary crops when the image
  * is already tightly framed.
  */
-const MIN_CROP_FRACTION = 0.15;
+const MIN_CROP_FRACTION = 0.05;
 
 async function preprocessBPImageCore(
   dataUrl: string,
@@ -158,16 +157,17 @@ async function preprocessBPImageCore(
     steps.push({ label: 'Contrast Stretched', dataUrl: canvas.toDataURL('image/png') });
   }
 
-  // --- Step 4: Otsu's adaptive binarisation ---
-  const threshold = computeOtsuThreshold(data);
-  for (let i = 0; i < data.length; i += 4) {
-    const bw = data[i] < threshold ? 0 : 255;
-    data[i] = data[i + 1] = data[i + 2] = bw;
-  }
+  // --- Step 4: Local adaptive binarisation ---
+  // Uses an integral-image local mean to compute a per-pixel threshold.
+  // Pixels significantly darker than their local neighbourhood are classified
+  // as foreground (digit segments).  This avoids the failure mode of global
+  // Otsu, which picks a single threshold dominated by the device body /
+  // background and turns the entire LCD area dark.
+  adaptiveThreshold(data, width, height);
 
   if (collectSteps) {
     ctx.putImageData(imageData, 0, 0);
-    steps.push({ label: `Binarised (Otsu t=${threshold})`, dataUrl: canvas.toDataURL('image/png') });
+    steps.push({ label: 'Binarised (adaptive)', dataUrl: canvas.toDataURL('image/png') });
   }
 
   // --- Step 5: Morphological closing (dilate then erode, 3×3 kernel) ---
@@ -277,8 +277,14 @@ function detectScreenRegion(
  * primary content region.
  *
  * 1. Smooth with a small moving-average window (2 % of `size`).
- * 2. Set threshold at 20 % of the smoothed peak.
- * 3. Return the first and last indices that exceed the threshold.
+ * 2. Set threshold at 30 % of the smoothed peak.
+ * 3. Find contiguous segments above the threshold, then return the segment
+ *    with the highest total edge mass.
+ *
+ * Using the densest contiguous segment (rather than the span from first to
+ * last above-threshold point) prevents isolated edge peaks — such as the
+ * device-body boundary against a dark background — from inflating the
+ * detected region to span the entire image.
  */
 function findContentRange(
   profile: Float64Array,
@@ -304,19 +310,40 @@ function findContentRange(
   }
   if (maxV === 0) return null;
 
-  const threshold = maxV * 0.2;
+  const threshold = maxV * 0.3;
 
-  let start = -1;
-  let end = -1;
+  // Find the densest contiguous segment above threshold.
+  let bestStart = -1;
+  let bestEnd = -1;
+  let bestMass = 0;
+
+  let segStart = -1;
+  let segMass = 0;
+
   for (let i = 0; i < size; i++) {
     if (smoothed[i] >= threshold) {
-      if (start === -1) start = i;
-      end = i;
+      if (segStart === -1) segStart = i;
+      segMass += smoothed[i];
+    } else {
+      if (segStart !== -1) {
+        if (segMass > bestMass) {
+          bestStart = segStart;
+          bestEnd = i - 1;
+          bestMass = segMass;
+        }
+        segStart = -1;
+        segMass = 0;
+      }
     }
   }
+  // Handle segment that extends to the end.
+  if (segStart !== -1 && segMass > bestMass) {
+    bestStart = segStart;
+    bestEnd = size - 1;
+  }
 
-  if (start === -1) return null;
-  return { start, end };
+  if (bestStart === -1) return null;
+  return { start: bestStart, end: bestEnd };
 }
 
 /**
@@ -365,43 +392,69 @@ function applyContrastStretch(data: Uint8ClampedArray, clipPercent: number): voi
 }
 
 /**
- * Compute the optimal binarisation threshold via Otsu's method.
- * Maximises inter-class variance between foreground and background.
+ * Local adaptive binarisation using an integral-image local mean
+ * (Bradley's method).
+ *
+ * For each pixel the threshold is `localMean * (1 − sensitivity)`.
+ * Pixels darker than the threshold become 0 (foreground / digit segment);
+ * the rest become 255 (background).
+ *
+ * This handles non-uniform lighting and imperfect cropping far better than
+ * a single global threshold (e.g. Otsu), which can be skewed by device-body
+ * or table pixels and turn the entire LCD area dark.
+ *
+ * @param windowFraction — neighbourhood radius as a fraction of the smaller
+ *   image dimension.  ~12.5 % works well for LCD digit segments.
+ * @param sensitivity — a pixel must be this fraction darker than the local
+ *   mean to be classified as foreground.  0.15 suits most LCD displays.
  */
-function computeOtsuThreshold(data: Uint8ClampedArray): number {
-  const totalPixels = data.length / 4;
+function adaptiveThreshold(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  windowFraction: number = 0.125,
+  sensitivity: number = 0.15,
+): void {
+  const totalPixels = width * height;
+  // Ensure the window size is odd so it is centred on each pixel.
+  const winSize = Math.max(3, Math.floor(Math.min(width, height) * windowFraction) | 1);
+  const halfWin = Math.floor(winSize / 2);
 
-  const histogram = new Array<number>(256).fill(0);
-  for (let i = 0; i < data.length; i += 4) {
-    histogram[data[i]]++;
-  }
-
-  let sum = 0;
-  for (let v = 0; v < 256; v++) sum += v * histogram[v];
-
-  let sumB = 0;
-  let wB = 0;
-  let maxVariance = 0;
-  let bestThreshold = 128;
-
-  for (let t = 0; t < 256; t++) {
-    wB += histogram[t];
-    if (wB === 0) continue;
-    const wF = totalPixels - wB;
-    if (wF === 0) break;
-
-    sumB += t * histogram[t];
-    const mB = sumB / wB;
-    const mF = (sum - sumB) / wF;
-    const variance = wB * wF * (mB - mF) ** 2;
-
-    if (variance > maxVariance) {
-      maxVariance = variance;
-      bestThreshold = t;
+  // Build integral image from the red channel (== green after extraction).
+  const integral = new Float64Array(totalPixels);
+  for (let y = 0; y < height; y++) {
+    let rowSum = 0;
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x;
+      rowSum += data[idx * 4];
+      integral[idx] = rowSum + (y > 0 ? integral[(y - 1) * width + x] : 0);
     }
   }
 
-  return bestThreshold;
+  // Apply per-pixel threshold.
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const x1 = Math.max(0, x - halfWin);
+      const y1 = Math.max(0, y - halfWin);
+      const x2 = Math.min(width - 1, x + halfWin);
+      const y2 = Math.min(height - 1, y + halfWin);
+
+      const count = (x2 - x1 + 1) * (y2 - y1 + 1);
+
+      // Sum of pixel values in the window via the integral image.
+      let sum = integral[y2 * width + x2];
+      if (x1 > 0) sum -= integral[y2 * width + (x1 - 1)];
+      if (y1 > 0) sum -= integral[(y1 - 1) * width + x2];
+      if (x1 > 0 && y1 > 0) sum += integral[(y1 - 1) * width + (x1 - 1)];
+
+      const localMean = sum / count;
+      const t = localMean * (1 - sensitivity);
+
+      const i = (y * width + x) * 4;
+      const bw = data[i] < t ? 0 : 255;
+      data[i] = data[i + 1] = data[i + 2] = bw;
+    }
+  }
 }
 
 /**
