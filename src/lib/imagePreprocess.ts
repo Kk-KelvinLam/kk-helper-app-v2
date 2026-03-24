@@ -75,7 +75,9 @@ async function preprocessBPImageCore(
   const ctx = canvas.getContext('2d');
   if (!ctx) return { result: dataUrl, steps: [] };
 
-  // Use nearest-neighbour for integer scaling (keeps LCD segments crisp)
+  // Disable image smoothing when scaling up by more than 2× so LCD segment
+  // edges stay crisp (nearest-neighbour interpolation).  At lower scale factors
+  // smoothing is acceptable and avoids aliasing artefacts.
   ctx.imageSmoothingEnabled = scale <= 2;
   ctx.drawImage(img, 0, 0, width, height);
 

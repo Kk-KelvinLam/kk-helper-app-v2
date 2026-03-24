@@ -311,9 +311,14 @@ export function normalizeBPText(raw: string): string {
   t = t.replace(/[}](?=[0-9])/g, '1');
   // Remove periods/commas between consecutive digits — LCD segment artefacts;
   // BP values are always integers, never decimals.
-  // Applied twice to handle chained cases like "1.1.4" → "11.4" → "114"
-  t = t.replace(/(\d)[.,](\d)/g, '$1$2');
-  t = t.replace(/(\d)[.,](\d)/g, '$1$2');
+  // Applied iteratively to handle chained cases like "1.1.4" → "114"
+  {
+    let prev;
+    do {
+      prev = t;
+      t = t.replace(/(\d)[.,](\d)/g, '$1$2');
+    } while (t !== prev);
+  }
 
   // Remove stray non-meaningful characters that break digit sequences
   // (e.g. OCR inserting a dot, comma, or space between LCD segments)
