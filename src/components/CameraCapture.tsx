@@ -10,11 +10,15 @@ interface CameraCaptureProps {
   onClose: () => void;
   title?: string;
   hint?: string;
+  /** Tesseract language string. Defaults to 'eng+chi_tra'. */
+  ocrLanguage?: string;
+  /** Optional image preprocessor applied before OCR (e.g. contrast enhancement for LCD displays). */
+  preprocessImage?: (dataUrl: string) => Promise<string>;
 }
 
 type CameraState = 'idle' | 'streaming' | 'preview';
 
-export default function CameraCapture({ onTextExtracted, onImageCaptured, onClose, title, hint }: CameraCaptureProps) {
+export default function CameraCapture({ onTextExtracted, onImageCaptured, onClose, title, hint, ocrLanguage, preprocessImage }: CameraCaptureProps) {
   const { t } = useLanguage();
   const { isDark } = useTheme();
   const [cameraState, setCameraState] = useState<CameraState>('idle');
@@ -110,7 +114,9 @@ export default function CameraCapture({ onTextExtracted, onImageCaptured, onClos
     setError(null);
 
     try {
-      const result = await Tesseract.recognize(imagePreview, 'eng+chi_tra');
+      // Optionally preprocess the image (e.g. contrast enhancement for LCD displays)
+      const ocrInput = preprocessImage ? await preprocessImage(imagePreview) : imagePreview;
+      const result = await Tesseract.recognize(ocrInput, ocrLanguage || 'eng+chi_tra');
       const text = result.data.text.trim();
       if (onImageCaptured) {
         onImageCaptured(imagePreview);
