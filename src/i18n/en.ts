@@ -120,6 +120,7 @@ const en = {
   settings: 'Settings',
   testingMode: 'Testing Mode',
   testingModeHint: 'Show debug info for OCR and experimental features',
+  appVersion: 'Version',
 
   // Profile & Sharing
   navProfile: 'Profile',
