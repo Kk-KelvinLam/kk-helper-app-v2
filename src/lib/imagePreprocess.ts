@@ -54,10 +54,13 @@ export async function preprocessBPImage(dataUrl: string): Promise<string> {
   }
 
   // --- Step 3: Binarise (threshold) ---
-  // Use a threshold that separates dark LCD segments from the lighter background.
-  const threshold = 128;
+  // A mid-range threshold works well for most LCD/LED segment displays where
+  // the digits are considerably darker than the background after contrast
+  // stretching.  Adaptive methods (e.g. Otsu) would require a histogram pass
+  // and add complexity with limited benefit for this use-case.
+  const BINARISE_THRESHOLD = 128;
   for (let i = 0; i < data.length; i += 4) {
-    const bw = data[i] < threshold ? 0 : 255;
+    const bw = data[i] < BINARISE_THRESHOLD ? 0 : 255;
     data[i] = data[i + 1] = data[i + 2] = bw;
   }
 

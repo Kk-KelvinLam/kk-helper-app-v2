@@ -288,7 +288,7 @@ export function normalizeBPText(raw: string): string {
   // Normalise line endings
   t = t.replace(/\r\n/g, '\n');
 
-  // Full-width digits → ASCII digits
+  // Full-width digits → ASCII digits  (offset 0xFEE0 = U+FF10 − U+0030)
   t = t.replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0));
 
   // Full-width colon / space → ASCII equivalents
@@ -298,6 +298,7 @@ export function normalizeBPText(raw: string): string {
   // Common OCR character misreads for digits (only when adjacent to digits or
   // at positions that look like part of a number sequence)
   // |, I, l (lowercase-L) → 1 when next to a digit
+  // Note: $11 in replacement = capture-group $1 + literal '1' (JS spec §22.1.3.19)
   t = t.replace(/([0-9])[|Il](?=[0-9\s])/g, '$11');
   t = t.replace(/[|Il](?=[0-9])/g, '1');
   // O (uppercase letter) → 0 when between digits
@@ -333,6 +334,7 @@ export function parseBPText(text: string): ParsedBPData {
   // Also supports reversed order: "114 高压" (number before label)
   const SYS_LABEL = '(?:SYS(?:TOLIC)?|上壓|上压|收縮壓?|收缩压?|收縮|收缩|高压|高壓)';
   const DIA_LABEL = '(?:DIA(?:STOLIC)?|下壓|下压|舒張壓?|舒张压?|舒張|舒张|低压|低壓)';
+  // 脉博/脈博 = common OCR misread of 脉搏/脈搏 (博 'extensive' vs 搏 'beat/pulse')
   const PUL_LABEL = '(?:PUL(?:SE)?|HR|HEART[ \\t]*RATE|PR|脈搏|脉搏|脉博|脈博|心跳|脈率|脉率|心率)';
   const BP_UNIT = '(?:mm[ \\t]*Hg|kPa)';
   const PUL_UNIT = '(?:\\/min|bpm|搏[ \\t]*[/／][ \\t]*分|次[ \\t]*[/／][ \\t]*分)';
@@ -361,9 +363,9 @@ export function parseBPText(text: string): ParsedBPData {
     new RegExp(`(\\d{2,3})${SP}*${PUL_UNIT}?${SP}*${PUL_LABEL}`, 'i'),
   ) : null;
 
-  if (sysMatch || sysMatchRev) result.systolic = (sysMatch || sysMatchRev)![1];
-  if (diaMatch || diaMatchRev) result.diastolic = (diaMatch || diaMatchRev)![1];
-  if (pulMatch || pulMatchRev) result.heartRate = (pulMatch || pulMatchRev)![1];
+  if (sysMatch ?? sysMatchRev) result.systolic = (sysMatch ?? sysMatchRev)![1];
+  if (diaMatch ?? diaMatchRev) result.diastolic = (diaMatch ?? diaMatchRev)![1];
+  if (pulMatch ?? pulMatchRev) result.heartRate = (pulMatch ?? pulMatchRev)![1];
 
   if (result.systolic && result.diastolic) {
     if (!result.heartRate) {
