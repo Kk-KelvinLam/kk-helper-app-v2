@@ -272,6 +272,48 @@ export function parsePriceTagText(text: string): ParsedPriceTagData {
 // ---------------------------------------------------------------------------
 
 /**
+ * Normalise raw OCR text to improve BP value extraction.
+ *
+ * LCD segment displays and mixed CJK/Latin text often produce:
+ * - Stray pipe/bracket characters where digits should be (| → 1, O → 0)
+ * - Full-width digits (０-９) instead of ASCII digits
+ * - Extra whitespace, stray symbols, or control characters
+ *
+ * This function cleans the text *before* regex matching so that the
+ * extraction patterns have a better chance of succeeding.
+ */
+export function normalizeBPText(raw: string): string {
+  let t = raw;
+
+  // Normalise line endings
+  t = t.replace(/\r\n/g, '\n');
+
+  // Full-width digits → ASCII digits  (offset 0xFEE0 = U+FF10 − U+0030)
+  t = t.replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0));
+
+  // Full-width colon / space → ASCII equivalents
+  t = t.replace(/：/g, ':');
+  t = t.replace(/\u3000/g, ' ');
+
+  // Common OCR character misreads for digits (only when adjacent to digits or
+  // at positions that look like part of a number sequence)
+  // |, I, l (lowercase-L) → 1 when next to a digit
+  // Note: $11 in replacement = capture-group $1 + literal '1' (JS spec §22.1.3.19)
+  t = t.replace(/([0-9])[|Il](?=[0-9\s])/g, '$11');
+  t = t.replace(/[|Il](?=[0-9])/g, '1');
+  // O (uppercase letter) → 0 when between digits
+  t = t.replace(/([0-9])O/g, '$10');
+  t = t.replace(/O(?=[0-9])/g, '0');
+
+  // Remove stray non-meaningful characters that break digit sequences
+  // (e.g. OCR inserting a dot, comma, or space between LCD segments)
+  // Collapse multiple spaces
+  t = t.replace(/[ \t]+/g, ' ');
+
+  return t.trim();
+}
+
+/**
  * Parse OCR text from a blood pressure monitor display and extract
  * systolic, diastolic, and heart rate values.
  *
@@ -283,25 +325,47 @@ export function parsePriceTagText(text: string): ParsedPriceTagData {
  */
 export function parseBPText(text: string): ParsedBPData {
   const result: ParsedBPData = { systolic: '', diastolic: '', heartRate: '' };
-  const normalized = text.replace(/\r\n/g, '\n').trim();
+  const normalized = normalizeBPText(text);
   if (!normalized) return result;
 
   // --- Strategy 1: Labeled patterns (most reliable) ---
   // Allow optional unit text (e.g. "mmHg") between labels and numbers
   // Supports both Traditional Chinese (收縮壓/舒張壓/脈搏) and Simplified Chinese (收缩压/舒张压/脉搏)
+  // Also supports reversed order: "114 高压" (number before label)
+  const SYS_LABEL = '(?:SYS(?:TOLIC)?|上壓|上压|收縮壓?|收缩压?|收縮|收缩|高压|高壓)';
+  const DIA_LABEL = '(?:DIA(?:STOLIC)?|下壓|下压|舒張壓?|舒张压?|舒張|舒张|低压|低壓)';
+  // 脉博/脈博 = common OCR misread of 脉搏/脈搏 (博 'extensive' vs 搏 'beat/pulse')
+  const PUL_LABEL = '(?:PUL(?:SE)?|HR|HEART[ \\t]*RATE|PR|脈搏|脉搏|脉博|脈博|心跳|脈率|脉率|心率)';
+  const BP_UNIT = '(?:mm[ \\t]*Hg|kPa)';
+  const PUL_UNIT = '(?:\\/min|bpm|搏[ \\t]*[/／][ \\t]*分|次[ \\t]*[/／][ \\t]*分)';
+  // Whitespace that does NOT cross newlines (avoids grabbing numbers from the next line)
+  const SP = '[ \\t]';
+
+  // Forward: label [unit] number  (same line only)
   const sysMatch = normalized.match(
-    /(?:SYS(?:TOLIC)?|上壓|上压|收縮壓?|收缩压?|收縮|收缩|高压)[.:\s]*(?:mm\s*Hg|kPa)?\s*(\d{2,3})/i,
+    new RegExp(`${SYS_LABEL}[.:${SP}]*${BP_UNIT}?${SP}*(\\d{2,3})`, 'i'),
   );
   const diaMatch = normalized.match(
-    /(?:DIA(?:STOLIC)?|下壓|下压|舒張壓?|舒张压?|舒張|舒张|低压)[.:\s]*(?:mm\s*Hg|kPa)?\s*(\d{2,3})/i,
+    new RegExp(`${DIA_LABEL}[.:${SP}]*${BP_UNIT}?${SP}*(\\d{2,3})`, 'i'),
   );
   const pulMatch = normalized.match(
-    /(?:PUL(?:SE)?|HR|HEART\s*RATE|PR|脈搏|脉搏|脉博|心跳|脈率|脉率|心率)[.:\s]*(?:\/min|bpm|搏\s*[/／]\s*分|次\s*[/／]\s*分)?\s*(\d{2,3})/i,
+    new RegExp(`${PUL_LABEL}[.:${SP}]*${PUL_UNIT}?${SP}*(\\d{2,3})`, 'i'),
   );
 
-  if (sysMatch) result.systolic = sysMatch[1];
-  if (diaMatch) result.diastolic = diaMatch[1];
-  if (pulMatch) result.heartRate = pulMatch[1];
+  // Reverse: number [unit] label  (some OCR engines output numbers before labels)
+  const sysMatchRev = !sysMatch ? normalized.match(
+    new RegExp(`(\\d{2,3})${SP}*${BP_UNIT}?${SP}*${SYS_LABEL}`, 'i'),
+  ) : null;
+  const diaMatchRev = !diaMatch ? normalized.match(
+    new RegExp(`(\\d{2,3})${SP}*${BP_UNIT}?${SP}*${DIA_LABEL}`, 'i'),
+  ) : null;
+  const pulMatchRev = !pulMatch ? normalized.match(
+    new RegExp(`(\\d{2,3})${SP}*${PUL_UNIT}?${SP}*${PUL_LABEL}`, 'i'),
+  ) : null;
+
+  if (sysMatch ?? sysMatchRev) result.systolic = (sysMatch ?? sysMatchRev)![1];
+  if (diaMatch ?? diaMatchRev) result.diastolic = (diaMatch ?? diaMatchRev)![1];
+  if (pulMatch ?? pulMatchRev) result.heartRate = (pulMatch ?? pulMatchRev)![1];
 
   if (result.systolic && result.diastolic) {
     if (!result.heartRate) {
@@ -333,7 +397,7 @@ export function parseBPText(text: string): ParsedBPData {
       }
       if (!result.heartRate) {
         const pulMatch2 = normalized.match(
-          /(?:PUL(?:SE)?|HR|PR|脈搏|脉搏|脉博|心跳|脈率|脉率|心率)[.:\s]*(?:\/min|bpm|搏\s*[/／]\s*分|次\s*[/／]\s*分)?\s*(\d{2,3})/i,
+          new RegExp(`${PUL_LABEL}[.:${SP}]*${PUL_UNIT}?${SP}*(\\d{2,3})`, 'i'),
         );
         if (pulMatch2) result.heartRate = pulMatch2[1];
       }

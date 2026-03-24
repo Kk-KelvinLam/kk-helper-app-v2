@@ -13,6 +13,7 @@ import {
 } from '@/lib/bloodPressure';
 import { getSharedWithMe } from '@/lib/sharing';
 import { parseBPText, type ParsedBPData } from '@/lib/ocrParser';
+import { preprocessBPImage } from '@/lib/imagePreprocess';
 import { useTestingMode } from '@/contexts/TestingModeContext';
 import CameraCapture from '@/components/CameraCapture';
 import type { BloodPressureRecord, BloodPressureFormData, BPCategory, Gender, ShareRecord } from '@/types';
@@ -935,6 +936,8 @@ export default function BloodPressurePage() {
           onClose={() => setShowCamera(false)}
           title={t('bpScanReading')}
           hint={t('bpCaptureHint')}
+          ocrLanguage="eng+chi_tra+chi_sim"
+          preprocessImage={preprocessBPImage}
         />
       )}
     </div>

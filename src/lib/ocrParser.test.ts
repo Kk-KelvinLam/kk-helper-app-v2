@@ -8,6 +8,7 @@ import {
   parseReceiptText,
   parsePriceTagText,
   parseBPText,
+  normalizeBPText,
 } from '@/lib/ocrParser';
 
 describe('ocrParser', () => {
@@ -495,6 +496,107 @@ describe('ocrParser', () => {
         systolic: '120', diastolic: '80', heartRate: '80',
       }));
       expect(result.strategy).toBe(3);
+    });
+
+    // --- New tests for text normalisation ---
+
+    it('handles full-width digits (０-９)', () => {
+      const result = parseBPText('SYS １２０ DIA ８０ PUL ７２');
+      expect(result).toEqual(expect.objectContaining({
+        systolic: '120', diastolic: '80', heartRate: '72',
+      }));
+      expect(result.strategy).toBe(1);
+    });
+
+    it('handles pipe character misread as digit 1 (e.g. |14 → 114)', () => {
+      const result = parseBPText('高压 |14\n低压 67\n脉搏 83');
+      expect(result).toEqual(expect.objectContaining({
+        systolic: '114', diastolic: '67', heartRate: '83',
+      }));
+      expect(result.strategy).toBe(1);
+    });
+
+    it('handles O misread as 0 in numbers (e.g. 12O → 120)', () => {
+      const result = parseBPText('SYS 12O DIA 8O PUL 72');
+      expect(result).toEqual(expect.objectContaining({
+        systolic: '120', diastolic: '80', heartRate: '72',
+      }));
+      expect(result.strategy).toBe(1);
+    });
+
+    it('handles reversed label order: number before label (114 高压)', () => {
+      const result = parseBPText('114 高压\n67 低压\n83 脉搏');
+      expect(result).toEqual(expect.objectContaining({
+        systolic: '114', diastolic: '67', heartRate: '83',
+      }));
+      expect(result.strategy).toBe(1);
+    });
+
+    it('handles reversed label order with units (114 kPa 高压)', () => {
+      const result = parseBPText('114 kPa 高压\n67 mmHg 低压\n83 脉搏');
+      expect(result).toEqual(expect.objectContaining({
+        systolic: '114', diastolic: '67', heartRate: '83',
+      }));
+      expect(result.strategy).toBe(1);
+    });
+
+    it('extracts Traditional Chinese 高壓/低壓 labels', () => {
+      const result = parseBPText('高壓 120\n低壓 80\n脈搏 72');
+      expect(result).toEqual(expect.objectContaining({
+        systolic: '120', diastolic: '80', heartRate: '72',
+      }));
+      expect(result.strategy).toBe(1);
+    });
+
+    it('handles Traditional Chinese OCR misread 脈博', () => {
+      const result = parseBPText('高壓 130\n低壓 85\n脈博 68');
+      expect(result).toEqual(expect.objectContaining({
+        systolic: '130', diastolic: '85', heartRate: '68',
+      }));
+      expect(result.strategy).toBe(1);
+    });
+
+    it('handles full-width colon in labels', () => {
+      const result = parseBPText('SYS：120\nDIA：80\nPUL：72');
+      expect(result).toEqual(expect.objectContaining({
+        systolic: '120', diastolic: '80', heartRate: '72',
+      }));
+      expect(result.strategy).toBe(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  describe('normalizeBPText', () => {
+    it('converts full-width digits to ASCII', () => {
+      expect(normalizeBPText('１２０')).toBe('120');
+    });
+
+    it('converts full-width colon to ASCII', () => {
+      expect(normalizeBPText('SYS：120')).toBe('SYS:120');
+    });
+
+    it('converts ideographic space to ASCII space', () => {
+      expect(normalizeBPText('SYS\u3000120')).toBe('SYS 120');
+    });
+
+    it('normalises pipe next to digit to 1', () => {
+      expect(normalizeBPText('|14')).toBe('114');
+    });
+
+    it('normalises uppercase O between digits to 0', () => {
+      expect(normalizeBPText('12O')).toBe('120');
+    });
+
+    it('collapses multiple spaces', () => {
+      expect(normalizeBPText('SYS   120')).toBe('SYS 120');
+    });
+
+    it('trims whitespace', () => {
+      expect(normalizeBPText('  120 80 72  ')).toBe('120 80 72');
+    });
+
+    it('normalises CRLF to LF', () => {
+      expect(normalizeBPText('120\r\n80')).toBe('120\n80');
     });
   });
 });
