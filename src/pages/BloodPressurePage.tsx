@@ -13,7 +13,7 @@ import {
 } from '@/lib/bloodPressure';
 import { getSharedWithMe } from '@/lib/sharing';
 import { parseBPText, type ParsedBPData } from '@/lib/ocrParser';
-import { preprocessBPImage, preprocessBPImageWithSteps, generateMultiScaleImages, type PreprocessingStep, type GlareDetectionResult } from '@/lib/imagePreprocess';
+import { preprocessBPImage, preprocessBPImageWithSteps, preprocessBPImageLight, generateMultiScaleImages, type PreprocessingStep, type GlareDetectionResult } from '@/lib/imagePreprocess';
 import { useTestingMode } from '@/contexts/TestingModeContext';
 import CameraCapture from '@/components/CameraCapture';
 import type { BloodPressureRecord, BloodPressureFormData, BPCategory, Gender, ShareRecord } from '@/types';
@@ -276,6 +276,11 @@ export default function BloodPressurePage() {
     setMultiScaleImgs(scales);
     return result;
   }, [isTestingMode]);
+
+  /** Light preprocessor — contrast-enhanced grayscale without binarisation. */
+  const handlePreprocessLight = useCallback(async (dataUrl: string): Promise<string> => {
+    return preprocessBPImageLight(dataUrl);
+  }, []);
 
   const handleSave = async () => {
     if (!user || !formData.systolic || !formData.diastolic || !formData.heartRate) return;
@@ -1009,6 +1014,7 @@ export default function BloodPressurePage() {
           hint={t('bpCaptureHint')}
           ocrLanguage="eng+chi_tra+chi_sim"
           preprocessImage={handlePreprocess}
+          preprocessImageLight={handlePreprocessLight}
           ocrParams={{ tessedit_pageseg_mode: '6' }}
           ocrSecondPassParams={{ tessedit_pageseg_mode: '6', tessedit_char_whitelist: '0123456789' }}
           onConfidence={setOcrConfidence}

@@ -3,6 +3,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Camera, Upload, X, Loader2 } from 'lucide-react';
 import Tesseract from 'tesseract.js';
+import { extractImageStrips } from '@/lib/imagePreprocess';
 
 interface CameraCaptureProps {
   onTextExtracted: (text: string, digitOnlyText?: string) => void;
@@ -35,6 +36,12 @@ interface CameraCaptureProps {
    * is below the retry threshold, the next scaled variant is tried.
    */
   multiScaleImages?: string[];
+  /**
+   * Optional light preprocessor that produces a contrast-enhanced grayscale
+   * image (no binarisation).  Used as an alternative OCR input when the
+   * standard binarised pipeline produces low confidence.
+   */
+  preprocessImageLight?: (dataUrl: string) => Promise<string>;
 }
 
 type CameraState = 'idle' | 'streaming' | 'preview';
@@ -42,7 +49,7 @@ type CameraState = 'idle' | 'streaming' | 'preview';
 /** Minimum OCR confidence (0–100) below which a retry with the next scale is attempted. */
 const CONFIDENCE_RETRY_THRESHOLD = 60;
 
-export default function CameraCapture({ onTextExtracted, onImageCaptured, onClose, title, hint, ocrLanguage, preprocessImage, ocrParams, ocrSecondPassParams, onConfidence, multiScaleImages }: CameraCaptureProps) {
+export default function CameraCapture({ onTextExtracted, onImageCaptured, onClose, title, hint, ocrLanguage, preprocessImage, ocrParams, ocrSecondPassParams, onConfidence, multiScaleImages, preprocessImageLight }: CameraCaptureProps) {
   const { t } = useLanguage();
   const { isDark } = useTheme();
   const [cameraState, setCameraState] = useState<CameraState>('idle');
@@ -246,6 +253,74 @@ export default function CameraCapture({ onTextExtracted, onImageCaptured, onClos
             if (retryDigit) digitOnlyText = retryDigit;
           }
           if (primaryResult.confidence >= CONFIDENCE_RETRY_THRESHOLD) break;
+        }
+      }
+
+      // -----------------------------------------------------------------
+      // Fallback strategies — "out of the box" alternatives
+      // When the standard full-image OCR produces low confidence, try
+      // fundamentally different approaches instead of just tweaking params.
+      // -----------------------------------------------------------------
+
+      if (primaryResult.confidence < CONFIDENCE_RETRY_THRESHOLD) {
+        // --- Fallback A: Strip-based OCR (PSM 7 — single text line) ---
+        // Split the preprocessed image into horizontal strips (one per
+        // digit row) and OCR each strip individually.  Tesseract performs
+        // dramatically better on single lines than on multi-line images.
+        try {
+          const strips = await extractImageStrips(ocrInput);
+          if (strips.length >= 2) {
+            const stripWorker = await Tesseract.createWorker('eng');
+            await stripWorker.setParameters({
+              tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE,
+              tessedit_char_whitelist: '0123456789 ',
+            });
+
+            const stripTexts: string[] = [];
+            let totalConf = 0;
+            for (const strip of strips) {
+              const res = await stripWorker.recognize(strip.dataUrl);
+              const text = res.data.text.trim();
+              if (text) {
+                stripTexts.push(text);
+                totalConf += res.data.confidence;
+              }
+            }
+            await stripWorker.terminate();
+
+            if (stripTexts.length >= 2) {
+              const avgConf = totalConf / stripTexts.length;
+              const combinedText = stripTexts.join('\n');
+              if (avgConf > primaryResult.confidence || !digitOnlyText) {
+                // Strip OCR produced better results — use them
+                if (avgConf > primaryResult.confidence) {
+                  primaryResult = { text: combinedText, confidence: avgConf };
+                }
+                digitOnlyText = combinedText;
+              }
+            }
+          }
+        } catch {
+          // Strip-based OCR failed; continue with existing results
+        }
+      }
+
+      if (primaryResult.confidence < CONFIDENCE_RETRY_THRESHOLD && preprocessImageLight) {
+        // --- Fallback B: OCR on contrast-enhanced (non-binarised) image ---
+        // Binarisation can destroy information.  Try OCR on a high-contrast
+        // grayscale image that skips the adaptive thresholding step.
+        try {
+          const lightInput = await preprocessImageLight(imagePreview);
+          const [lightResult, lightDigit] = await Promise.all([
+            primaryOcr(lightInput),
+            secondaryOcr(lightInput),
+          ]);
+          if (lightResult.confidence > primaryResult.confidence) {
+            primaryResult = lightResult;
+            if (lightDigit) digitOnlyText = lightDigit;
+          }
+        } catch {
+          // Light preprocessing OCR failed; continue with existing results
         }
       }
 
