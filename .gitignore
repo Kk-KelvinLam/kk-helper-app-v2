@@ -39,3 +39,6 @@ __pycache__/
 backend/venv/
 backend/.venv/
 .pytest_cache/
+
+# Large model source files (converted to TF.js format)
+*.h5
