@@ -8,6 +8,10 @@
     ],
     "rewrites": [
       {
+        "source": "/models/**",
+        "destination": "/public/**"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
