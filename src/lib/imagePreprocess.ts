@@ -103,10 +103,8 @@ export async function generateMultiScaleImages(dataUrl: string): Promise<string[
 export async function preprocessBPImageLight(dataUrl: string): Promise<string> {
   const img = await loadImage(dataUrl);
   const scale = img.width < MIN_WIDTH ? Math.ceil(MIN_WIDTH / img.width) : 1;
-  const width = img.width * scale;
-  let w = width;
-  const height = img.height * scale;
-  let h = height;
+  let w = img.width * scale;
+  let h = img.height * scale;
 
   const canvas = document.createElement('canvas');
   canvas.width = w;

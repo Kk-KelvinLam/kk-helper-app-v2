@@ -270,6 +270,8 @@ export default function CameraCapture({ onTextExtracted, onImageCaptured, onClos
         try {
           const strips = await extractImageStrips(ocrInput);
           if (strips.length >= 2) {
+            // Uses 'eng' only — digit recognition is language-independent
+            // and the whitelist restricts output to digits anyway.
             const stripWorker = await Tesseract.createWorker('eng');
             await stripWorker.setParameters({
               tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE,
@@ -291,11 +293,14 @@ export default function CameraCapture({ onTextExtracted, onImageCaptured, onClos
             if (stripTexts.length >= 2) {
               const avgConf = totalConf / stripTexts.length;
               const combinedText = stripTexts.join('\n');
-              if (avgConf > primaryResult.confidence || !digitOnlyText) {
-                // Strip OCR produced better results — use them
-                if (avgConf > primaryResult.confidence) {
-                  primaryResult = { text: combinedText, confidence: avgConf };
-                }
+
+              // Use strip results when they beat the full-image confidence
+              if (avgConf > primaryResult.confidence) {
+                primaryResult = { text: combinedText, confidence: avgConf };
+                digitOnlyText = combinedText;
+              } else if (!digitOnlyText) {
+                // Even at lower confidence, strip digits provide useful
+                // fallback data when no digit-only text exists yet.
                 digitOnlyText = combinedText;
               }
             }
