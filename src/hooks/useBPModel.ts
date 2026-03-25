@@ -23,7 +23,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { loadBPModel, disposeBPModel, predictBPValue } from '@/lib/bpOcrInference';
+import { loadBPModel, retainBPModel, releaseBPModel, predictBPValue } from '@/lib/bpOcrInference';
 
 /** State returned by the {@link useBPModel} hook. */
 export interface UseBPModelResult {
@@ -64,6 +64,7 @@ export function useBPModel(modelUrl?: string): UseBPModelResult {
 
   useEffect(() => {
     mountedRef.current = true;
+    retainBPModel();
 
     const init = async () => {
       try {
@@ -88,9 +89,8 @@ export function useBPModel(modelUrl?: string): UseBPModelResult {
 
     return () => {
       mountedRef.current = false;
-      // Dispose the model when the last consumer unmounts.
-      // If another component still needs it, loadBPModel() will re-download.
-      disposeBPModel();
+      // Decrement ref count; model is disposed only when no consumers remain.
+      releaseBPModel();
     };
   }, [modelUrl]);
 

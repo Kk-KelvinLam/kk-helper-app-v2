@@ -183,6 +183,8 @@ export default function BPOcrCapture({
       // a vertically shifted crop to isolate the diastolic region.
       // If that fails or is implausible, we report only systolic.
       let diaValue: number | null = null;
+      // TODO: Pulse detection not yet implemented — requires a separate crop
+      // region or a dedicated pulse model.  Currently always null.
       const pulseValue: number | null = null;
 
       try {

@@ -39,6 +39,9 @@ let cachedModel: tf.LayersModel | null = null;
 /** In-flight model loading promise to prevent duplicate downloads. */
 let loadingPromise: Promise<tf.LayersModel> | null = null;
 
+/** Reference count of active consumers (hooks) — model is disposed when this reaches 0. */
+let refCount = 0;
+
 /**
  * Load (or return the cached) TensorFlow.js Layers model.
  *
@@ -73,6 +76,8 @@ export async function loadBPModel(
  * Release the cached model and free GPU/WebGL memory.
  *
  * Call this when the BP OCR feature is unmounted to reclaim resources.
+ * Uses reference counting so the model is only disposed when the last
+ * consumer releases it.
  */
 export function disposeBPModel(): void {
   if (cachedModel) {
@@ -80,6 +85,25 @@ export function disposeBPModel(): void {
     cachedModel = null;
   }
   loadingPromise = null;
+}
+
+/**
+ * Increment the reference count of active model consumers.
+ * Called by each hook instance on mount.
+ */
+export function retainBPModel(): void {
+  refCount++;
+}
+
+/**
+ * Decrement the reference count and dispose the model when it reaches 0.
+ * Called by each hook instance on unmount.
+ */
+export function releaseBPModel(): void {
+  refCount = Math.max(0, refCount - 1);
+  if (refCount === 0) {
+    disposeBPModel();
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -125,7 +149,10 @@ export async function preprocessImage(
   const canvas = document.createElement('canvas');
   canvas.width = MODEL_INPUT_WIDTH;
   canvas.height = MODEL_INPUT_HEIGHT;
-  const ctx = canvas.getContext('2d')!;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    throw new Error('Failed to obtain 2D canvas context for image preprocessing');
+  }
 
   // Draw with bilinear interpolation (default browser behaviour)
   ctx.drawImage(img, 0, 0, MODEL_INPUT_WIDTH, MODEL_INPUT_HEIGHT);
