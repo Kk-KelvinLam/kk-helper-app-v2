@@ -28,6 +28,17 @@ export interface BPExtractionApiResponse {
   raw_text: string;
   digit_only_text: string;
   confidence: number;
+  /** Whether the image was classified as a BP monitor display. */
+  is_bp_monitor: boolean | null;
+  /** BP monitor classification confidence (0.0–1.0). */
+  bp_monitor_confidence: number | null;
+}
+
+/** Response from the BP image classification endpoint. */
+export interface BPClassifyApiResponse {
+  is_bp_monitor: boolean;
+  confidence: number;
+  features: Record<string, number>;
 }
 
 /** Health check response from the backend. */
@@ -141,6 +152,50 @@ export async function extractBPFromBackend(
     }
 
     return (await response.json()) as BPExtractionApiResponse;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw err;
+  }
+}
+
+/**
+ * Classify whether an image contains a blood pressure monitor display.
+ *
+ * Uses ML-based feature extraction on the backend to determine if the
+ * image is of a BP monitor, returning a classification result with
+ * confidence score and individual feature scores.
+ *
+ * @param imageDataUrl - Base64-encoded image of the potential BP monitor
+ * @returns Classification result with confidence and features
+ * @throws Error if the backend is unavailable or request fails
+ */
+export async function classifyBPImage(
+  imageDataUrl: string,
+): Promise<BPClassifyApiResponse> {
+  if (!OCR_API_URL) {
+    throw new Error('OCR backend URL not configured');
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`${OCR_API_URL}/api/ocr/classify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: imageDataUrl }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        (errorData as { detail?: string }).detail || `Backend classification failed with status ${response.status}`,
+      );
+    }
+
+    return (await response.json()) as BPClassifyApiResponse;
   } catch (err) {
     clearTimeout(timeoutId);
     throw err;
