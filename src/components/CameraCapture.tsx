@@ -24,21 +24,86 @@ interface CameraCaptureProps {
    * digit-only whitelist improves accuracy.
    */
   ocrSecondPassParams?: Record<string, string>;
+  /**
+   * Optional callback invoked with the OCR confidence score (0–100).
+   * Useful for displaying confidence in the UI.
+   */
+  onConfidence?: (confidence: number) => void;
+  /**
+   * Optional callback to provide multi-scale image variants for
+   * confidence-based retry.  When provided, if the initial OCR confidence
+   * is below the retry threshold, the next scaled variant is tried.
+   */
+  multiScaleImages?: string[];
 }
 
 type CameraState = 'idle' | 'streaming' | 'preview';
 
-export default function CameraCapture({ onTextExtracted, onImageCaptured, onClose, title, hint, ocrLanguage, preprocessImage, ocrParams, ocrSecondPassParams }: CameraCaptureProps) {
+/** Minimum OCR confidence (0–100) below which a retry with the next scale is attempted. */
+const CONFIDENCE_RETRY_THRESHOLD = 60;
+
+export default function CameraCapture({ onTextExtracted, onImageCaptured, onClose, title, hint, ocrLanguage, preprocessImage, ocrParams, ocrSecondPassParams, onConfidence, multiScaleImages }: CameraCaptureProps) {
   const { t } = useLanguage();
   const { isDark } = useTheme();
   const [cameraState, setCameraState] = useState<CameraState>('idle');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Persistent Tesseract worker pool — initialised on mount, reused across captures
+  const primaryWorkerRef = useRef<Tesseract.Worker | null>(null);
+  const digitWorkerRef = useRef<Tesseract.Worker | null>(null);
+  const workersInitialisedRef = useRef(false);
+
+  const lang = ocrLanguage || 'eng+chi_tra';
+
+  // Initialise worker pool on mount
+  useEffect(() => {
+    let cancelled = false;
+
+    const initWorkers = async () => {
+      try {
+        if (ocrParams) {
+          const worker = await Tesseract.createWorker(lang, undefined, {
+            logger: (m: { progress?: number }) => {
+              if (m.progress !== undefined) {
+                setOcrProgress(Math.round(m.progress * 100));
+              }
+            },
+          });
+          await worker.setParameters(ocrParams);
+          if (!cancelled) primaryWorkerRef.current = worker;
+        }
+
+        if (ocrSecondPassParams) {
+          const digitWorker = await Tesseract.createWorker('eng');
+          await digitWorker.setParameters(ocrSecondPassParams);
+          if (!cancelled) digitWorkerRef.current = digitWorker;
+        }
+
+        if (!cancelled) workersInitialisedRef.current = true;
+      } catch {
+        // Worker init can fail in some environments; extractTextFromImage
+        // handles this by falling back to inline worker creation.
+      }
+    };
+
+    initWorkers();
+
+    return () => {
+      cancelled = true;
+      primaryWorkerRef.current?.terminate();
+      digitWorkerRef.current?.terminate();
+      primaryWorkerRef.current = null;
+      digitWorkerRef.current = null;
+      workersInitialisedRef.current = false;
+    };
+  }, [lang, ocrParams, ocrSecondPassParams]);
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -121,49 +186,83 @@ export default function CameraCapture({ onTextExtracted, onImageCaptured, onClos
     if (!imagePreview) return;
 
     setProcessing(true);
+    setOcrProgress(0);
     setError(null);
 
     try {
       // Optionally preprocess the image (e.g. contrast enhancement for LCD displays)
       const ocrInput = preprocessImage ? await preprocessImage(imagePreview) : imagePreview;
-      const lang = ocrLanguage || 'eng+chi_tra';
 
       // Primary OCR pass (with full language support for label detection)
-      const primaryOcr = async (): Promise<string> => {
+      const primaryOcr = async (input: string): Promise<{ text: string; confidence: number }> => {
+        if (primaryWorkerRef.current) {
+          const result = await primaryWorkerRef.current.recognize(input);
+          return { text: result.data.text.trim(), confidence: result.data.confidence };
+        }
         if (ocrParams) {
-          // Use a Tesseract worker for fine-grained configuration (PSM mode, etc.)
           const worker = await Tesseract.createWorker(lang);
           await worker.setParameters(ocrParams);
-          const result = await worker.recognize(ocrInput);
+          const result = await worker.recognize(input);
           await worker.terminate();
-          return result.data.text.trim();
+          return { text: result.data.text.trim(), confidence: result.data.confidence };
         }
-        const result = await Tesseract.recognize(ocrInput, lang);
-        return result.data.text.trim();
+        const result = await Tesseract.recognize(input, lang);
+        return { text: result.data.text.trim(), confidence: result.data.confidence };
       };
 
       // Optional second pass with digit-only params (e.g. whitelist='0123456789').
       // Runs in parallel with the primary pass for minimal additional latency.
       // Uses 'eng' only — digit recognition is language-independent.
-      const secondaryOcr = async (): Promise<string | undefined> => {
+      const secondaryOcr = async (input: string): Promise<string | undefined> => {
         if (!ocrSecondPassParams) return undefined;
+        if (digitWorkerRef.current) {
+          const result = await digitWorkerRef.current.recognize(input);
+          return result.data.text.trim();
+        }
         const worker = await Tesseract.createWorker('eng');
         await worker.setParameters(ocrSecondPassParams);
-        const result = await worker.recognize(ocrInput);
+        const result = await worker.recognize(input);
         await worker.terminate();
         return result.data.text.trim();
       };
 
-      const [text, digitOnlyText] = await Promise.all([primaryOcr(), secondaryOcr()]);
+      let [primaryResult, digitOnlyText] = await Promise.all([
+        primaryOcr(ocrInput),
+        secondaryOcr(ocrInput),
+      ]);
+
+      // Confidence-based retry with scaled image variants
+      if (
+        primaryResult.confidence < CONFIDENCE_RETRY_THRESHOLD &&
+        multiScaleImages &&
+        multiScaleImages.length > 0
+      ) {
+        for (const scaledImage of multiScaleImages) {
+          const retryResult = await primaryOcr(scaledImage);
+          if (retryResult.confidence > primaryResult.confidence) {
+            primaryResult = retryResult;
+            // Also retry digit-only on the better scale
+            const retryDigit = await secondaryOcr(scaledImage);
+            if (retryDigit) digitOnlyText = retryDigit;
+          }
+          if (primaryResult.confidence >= CONFIDENCE_RETRY_THRESHOLD) break;
+        }
+      }
+
+      // Report confidence score
+      if (onConfidence) {
+        onConfidence(primaryResult.confidence);
+      }
 
       if (onImageCaptured) {
         onImageCaptured(imagePreview);
       }
-      onTextExtracted(text || t('noTextDetected'), digitOnlyText);
+      onTextExtracted(primaryResult.text || t('noTextDetected'), digitOnlyText);
     } catch {
       setError(t('imageProcessError'));
     } finally {
       setProcessing(false);
+      setOcrProgress(0);
     }
   };
 
@@ -293,7 +392,7 @@ export default function CameraCapture({ onTextExtracted, onImageCaptured, onClos
                 {processing ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    {t('processing')}
+                    {ocrProgress > 0 ? `${ocrProgress}%` : t('processing')}
                   </>
                 ) : (
                   t('extractText')

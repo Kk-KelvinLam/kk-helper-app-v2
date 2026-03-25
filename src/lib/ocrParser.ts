@@ -13,6 +13,8 @@ export interface ParsedBPData {
   heartRate: string;
   /** Strategy number used for extraction (1=labeled, 2=slash, 3=numbers-only). Present only for debugging. */
   strategy?: number;
+  /** Whether an Irregular Heartbeat (IHB) indicator was detected on the display. */
+  irregularHeartbeat?: boolean;
 }
 
 export interface ParsedReceiptData {
@@ -362,6 +364,45 @@ export function normalizeBPText(raw: string): string {
 }
 
 /**
+ * Detect whether an Irregular Heartbeat (IHB) indicator is present in
+ * the OCR text.  Many BP monitors display "IHB", or a CJK equivalent
+ * such as "不規則" (Traditional Chinese) / "不规则" (Simplified Chinese)
+ * when an irregular pulse is detected during measurement.
+ */
+export function detectIrregularHeartbeat(text: string): boolean {
+  const IHB_PATTERNS = [
+    /\bIHB\b/i,
+    /不規則/,   // Traditional Chinese
+    /不规则/,   // Simplified Chinese
+  ];
+  return IHB_PATTERNS.some((re) => re.test(text));
+}
+
+/**
+ * Remove date/time strings from text to prevent them from polluting
+ * the number pool during BP value extraction (Strategy 3).
+ *
+ * BP monitors often display date/time (e.g. "2024/01/15", "12:30",
+ * "2024-01-15").  The 4-digit year "2024" could yield false candidates
+ * like "20" or "24"; time components "12:30" could inject "12" and "30".
+ *
+ * This function strips recognised date/time patterns before number
+ * extraction so only BP-relevant values remain.
+ */
+export function stripDateTimePatterns(text: string): string {
+  let t = text;
+  // ISO-style dates: 2024/01/15, 2024-01-15, 2024.01.15
+  t = t.replace(/\b\d{4}[/\-.](?:0?[1-9]|1[0-2])[/\-.](?:0?[1-9]|[12]\d|3[01])\b/g, ' ');
+  // Reversed dates: 15/01/2024, 01-15-2024
+  t = t.replace(/\b(?:0?[1-9]|[12]\d|3[01])[/\-.](?:0?[1-9]|1[0-2])[/\-.]\d{4}\b/g, ' ');
+  // Time patterns: 12:30, 08:05, 23:59
+  t = t.replace(/\b(?:[01]?\d|2[0-3]):[0-5]\d\b/g, ' ');
+  // Standalone 4-digit year when preceded/followed by typical date context
+  t = t.replace(/\b(19|20)\d{2}\b/g, ' ');
+  return t;
+}
+
+/**
  * Parse OCR text from a blood pressure monitor display and extract
  * systolic, diastolic, and heart rate values.
  *
@@ -381,6 +422,11 @@ export function parseBPText(text: string, digitOnlyText?: string): ParsedBPData 
   const result: ParsedBPData = { systolic: '', diastolic: '', heartRate: '' };
   const normalized = normalizeBPText(text);
   if (!normalized) return result;
+
+  // Detect Irregular Heartbeat indicator before parsing values
+  if (detectIrregularHeartbeat(text) || detectIrregularHeartbeat(normalized)) {
+    result.irregularHeartbeat = true;
+  }
 
   // --- Strategy 1: Labeled patterns (most reliable) ---
   // Allow optional unit text (e.g. "mmHg") between labels and numbers
@@ -471,7 +517,10 @@ export function parseBPText(text: string, digitOnlyText?: string): ParsedBPData 
   // The digit-only pass is produced by Tesseract with
   // tessedit_char_whitelist='0123456789', which prevents seven-segment LCD
   // segments from being misinterpreted as letters (e.g. 5→S, 6→b, 8→B).
-  const numText = digitOnlyText ? normalizeBPText(digitOnlyText) : normalized;
+  const rawNumText = digitOnlyText ? normalizeBPText(digitOnlyText) : normalized;
+
+  // Strip date/time patterns to prevent false matches (e.g. "2024" → "20", "24")
+  const numText = stripDateTimePatterns(rawNumText);
 
   // Extract all 2-3 digit numbers in valid physiological ranges.
   // Use a non-digit boundary to avoid matching partial numbers
@@ -552,4 +601,123 @@ export function parseBPText(text: string, digitOnlyText?: string): ParsedBPData 
   }
 
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Word-level bounding-box helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * A Tesseract word with its bounding box and confidence score.
+ * Mirrors the structure returned by `result.data.words`.
+ */
+export interface OcrWord {
+  text: string;
+  confidence: number;
+  bbox: { x0: number; y0: number; x1: number; y1: number };
+}
+
+/**
+ * Parse BP values using Tesseract word-level bounding boxes.
+ *
+ * Instead of relying on text line order, this function groups words into
+ * rows by Y-coordinate proximity, then assigns:
+ *   - systolic = number in the row with the largest bounding-box height
+ *     (typically the biggest font on the display)
+ *   - diastolic = number in the next largest row
+ *   - heart rate = number in the smallest row
+ *
+ * Falls back to `parseBPText()` when spatial parsing fails to find valid data.
+ *
+ * @param words — Array of word objects from `result.data.words`
+ * @param fallbackText — Raw OCR text for fallback parsing
+ * @param fallbackDigitOnlyText — Optional digit-only text for fallback
+ */
+export function parseBPFromWords(
+  words: OcrWord[],
+  fallbackText: string,
+  fallbackDigitOnlyText?: string,
+): ParsedBPData {
+  // Filter to words that contain 2-3 digit numbers with reasonable confidence
+  const MIN_WORD_CONFIDENCE = 40;
+  const digitWords = words
+    .filter((w) => w.confidence >= MIN_WORD_CONFIDENCE && /^\d{2,3}$/.test(w.text.trim()))
+    .map((w) => ({
+      value: parseInt(w.text.trim()),
+      confidence: w.confidence,
+      y: (w.bbox.y0 + w.bbox.y1) / 2,
+      height: w.bbox.y1 - w.bbox.y0,
+    }))
+    .filter((w) => w.value >= 30 && w.value <= 250);
+
+  if (digitWords.length < 2) {
+    return parseBPText(fallbackText, fallbackDigitOnlyText);
+  }
+
+  // Group by Y-coordinate proximity (rows within 20% of average height)
+  const avgHeight = digitWords.reduce((s, w) => s + w.height, 0) / digitWords.length;
+  const yTolerance = avgHeight * 0.5;
+
+  const rows: Array<typeof digitWords> = [];
+  const sorted = [...digitWords].sort((a, b) => a.y - b.y);
+
+  for (const word of sorted) {
+    const existingRow = rows.find((row) =>
+      Math.abs(row[0].y - word.y) < yTolerance,
+    );
+    if (existingRow) {
+      existingRow.push(word);
+    } else {
+      rows.push([word]);
+    }
+  }
+
+  if (rows.length < 2) {
+    return parseBPText(fallbackText, fallbackDigitOnlyText);
+  }
+
+  // Sort rows by max bounding-box height (largest font first)
+  const rowsWithSize = rows.map((row) => ({
+    row,
+    maxHeight: Math.max(...row.map((w) => w.height)),
+    // Pick the highest-confidence number in each row
+    bestWord: row.reduce((best, w) => (w.confidence > best.confidence ? w : best)),
+  }));
+  rowsWithSize.sort((a, b) => b.maxHeight - a.maxHeight);
+
+  const result: ParsedBPData = { systolic: '', diastolic: '', heartRate: '' };
+
+  // Check IHB in the full text
+  const allText = words.map((w) => w.text).join(' ');
+  if (detectIrregularHeartbeat(allText)) {
+    result.irregularHeartbeat = true;
+  }
+
+  const sysCandidate = rowsWithSize[0]?.bestWord;
+  const diaCandidate = rowsWithSize[1]?.bestWord;
+
+  if (
+    sysCandidate &&
+    diaCandidate &&
+    sysCandidate.value >= 70 &&
+    sysCandidate.value <= 250 &&
+    diaCandidate.value >= 40 &&
+    diaCandidate.value <= 150 &&
+    sysCandidate.value > diaCandidate.value
+  ) {
+    result.systolic = String(sysCandidate.value);
+    result.diastolic = String(diaCandidate.value);
+
+    if (rowsWithSize.length >= 3) {
+      const hrCandidate = rowsWithSize[2].bestWord;
+      if (hrCandidate.value >= 30 && hrCandidate.value <= 200) {
+        result.heartRate = String(hrCandidate.value);
+      }
+    }
+    result.strategy = 3;
+    return result;
+  }
+
+  // Spatial parsing didn't produce valid results; fall back to text-based parsing
+  return parseBPText(fallbackText, fallbackDigitOnlyText);
 }
