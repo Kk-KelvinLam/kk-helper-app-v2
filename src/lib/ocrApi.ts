@@ -6,17 +6,55 @@
  * is unavailable.
  */
 
+/** localStorage key for the user-configured backend API URL. */
+export const CUSTOM_API_URL_STORAGE_KEY = 'kk-helper-custom-api-url';
+
 /**
- * Base URL for the OCR backend API.
+ * Build-time default for the OCR backend API base URL.
  *
  * When {@link VITE_OCR_API_URL} is set (e.g. `http://localhost:8000` during
- * local development), requests are sent to that absolute URL.
+ * local development), that value is used as the default.
  *
  * When it is **not** set (typical production deploy), an empty string is used
  * so that requests go to the same origin.  Firebase Hosting rewrites
  * `/api/**` to the Cloud Run backend service, making this work transparently.
  */
-const OCR_API_URL: string = (import.meta.env.VITE_OCR_API_URL as string | undefined) ?? '';
+const BUILD_TIME_API_URL: string = (import.meta.env.VITE_OCR_API_URL as string | undefined) ?? '';
+
+/**
+ * Return the effective backend API base URL.
+ *
+ * Priority order:
+ * 1. User-configured URL saved in localStorage (runtime override).
+ * 2. Build-time {@link VITE_OCR_API_URL} environment variable.
+ * 3. Empty string → same-origin requests (Firebase Hosting rewrites /api/**).
+ */
+export function getApiBaseUrl(): string {
+  try {
+    const stored = localStorage.getItem(CUSTOM_API_URL_STORAGE_KEY);
+    if (stored && stored.trim()) return stored.trim();
+  } catch {
+    // localStorage not available
+  }
+  return BUILD_TIME_API_URL;
+}
+
+/**
+ * Persist a custom backend API URL to localStorage.
+ * Pass an empty string (or whitespace-only) to revert to the default.
+ */
+export function setCustomApiUrl(url: string): void {
+  try {
+    const trimmed = url.trim();
+    if (trimmed) {
+      localStorage.setItem(CUSTOM_API_URL_STORAGE_KEY, trimmed);
+    } else {
+      localStorage.removeItem(CUSTOM_API_URL_STORAGE_KEY);
+    }
+  } catch {
+    // localStorage not available
+  }
+}
 
 /** Timeout in milliseconds for backend API requests. */
 const API_TIMEOUT_MS = 30_000;
@@ -64,7 +102,7 @@ export async function isBackendAvailable(): Promise<boolean> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    const response = await fetch(`${OCR_API_URL}/api/health`, {
+    const response = await fetch(`${getApiBaseUrl()}/api/health`, {
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
@@ -94,7 +132,7 @@ export async function extractTextFromBackend(
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
 
   try {
-    const response = await fetch(`${OCR_API_URL}/api/ocr/extract`, {
+    const response = await fetch(`${getApiBaseUrl()}/api/ocr/extract`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image: imageDataUrl, language }),
@@ -135,7 +173,7 @@ export async function extractBPFromBackend(
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
 
   try {
-    const response = await fetch(`${OCR_API_URL}/api/ocr/bp`, {
+    const response = await fetch(`${getApiBaseUrl()}/api/ocr/bp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image: imageDataUrl, language }),
@@ -175,7 +213,7 @@ export async function classifyBPImage(
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
 
   try {
-    const response = await fetch(`${OCR_API_URL}/api/ocr/classify`, {
+    const response = await fetch(`${getApiBaseUrl()}/api/ocr/classify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image: imageDataUrl }),

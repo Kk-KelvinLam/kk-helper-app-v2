@@ -4,7 +4,8 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTestingMode } from '@/contexts/TestingModeContext';
 import { languageNames, type Language } from '@/i18n';
-import { ShoppingBag, TrendingUp, Calculator, LogOut, User, Moon, Sun, Globe, Settings, X, UserCircle, Heart, FlaskConical } from 'lucide-react';
+import { setCustomApiUrl, CUSTOM_API_URL_STORAGE_KEY } from '@/lib/ocrApi';
+import { ShoppingBag, TrendingUp, Calculator, LogOut, User, Moon, Sun, Globe, Settings, X, UserCircle, Heart, FlaskConical, Server } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -18,6 +19,32 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
   const { isDark, toggleTheme } = useTheme();
   const { isTestingMode, canEnableTestingMode, toggleTestingMode } = useTestingMode();
   const [showSettings, setShowSettings] = useState(false);
+
+  // Custom backend API URL state (read from localStorage via ocrApi helper)
+  const [apiUrlInput, setApiUrlInput] = useState<string>(() => {
+    try {
+      return localStorage.getItem(CUSTOM_API_URL_STORAGE_KEY) ?? '';
+    } catch {
+      return '';
+    }
+  });
+  const [apiUrlSaved, setApiUrlSaved] = useState(false);
+
+  function handleApiUrlChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setApiUrlInput(e.target.value);
+    setApiUrlSaved(false);
+  }
+
+  function handleApiUrlSave() {
+    setCustomApiUrl(apiUrlInput);
+    setApiUrlSaved(true);
+  }
+
+  function handleApiUrlClear() {
+    setApiUrlInput('');
+    setCustomApiUrl('');
+    setApiUrlSaved(false);
+  }
 
   return (
     <div className={`min-h-screen ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
@@ -232,6 +259,50 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
                   </button>
                 </div>
               )}
+
+              {/* Custom Backend API URL */}
+              <div className={`p-3 rounded-xl ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                <div className="flex items-center gap-3 mb-2">
+                  <Server className={`w-5 h-5 flex-shrink-0 ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
+                  <div>
+                    <span className={`text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
+                      {t('backendApiUrl')}
+                    </span>
+                    <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                      {t('backendApiUrlHint')}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={apiUrlInput}
+                    onChange={handleApiUrlChange}
+                    placeholder={t('backendApiUrlPlaceholder')}
+                    className={`flex-1 text-xs rounded-lg border px-3 py-1.5 outline-none min-w-0 ${
+                      isDark
+                        ? 'bg-gray-600 border-gray-500 text-white placeholder-gray-400'
+                        : 'bg-white border-gray-200 text-gray-700 placeholder-gray-400'
+                    }`}
+                  />
+                  <button
+                    onClick={handleApiUrlSave}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors flex-shrink-0"
+                  >
+                    {apiUrlSaved ? t('backendApiUrlSaved') : t('backendApiUrlSave')}
+                  </button>
+                  {apiUrlInput && (
+                    <button
+                      onClick={handleApiUrlClear}
+                      className={`text-xs px-3 py-1.5 rounded-lg transition-colors flex-shrink-0 ${
+                        isDark ? 'bg-gray-600 text-gray-300 hover:bg-gray-500' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                      }`}
+                    >
+                      {t('backendApiUrlClear')}
+                    </button>
+                  )}
+                </div>
+              </div>
 
               {/* App Version */}
               <div className={`flex items-center justify-between px-3 pt-2 pb-1 border-t ${isDark ? 'border-gray-700' : 'border-gray-100'}`}>
