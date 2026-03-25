@@ -4,6 +4,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { Camera, Upload, X, Loader2 } from 'lucide-react';
 import Tesseract from 'tesseract.js';
 import { extractImageStrips } from '@/lib/imagePreprocess';
+import { isBackendAvailable, extractBPFromBackend } from '@/lib/ocrApi';
 
 interface CameraCaptureProps {
   onTextExtracted: (text: string, digitOnlyText?: string) => void;
@@ -42,6 +43,12 @@ interface CameraCaptureProps {
    * standard binarised pipeline produces low confidence.
    */
   preprocessImageLight?: (dataUrl: string) => Promise<string>;
+  /**
+   * When true, enables backend-based BP extraction. The component sends
+   * the raw image to the Python backend for preprocessing, OCR, and parsing.
+   * Falls back to client-side Tesseract.js if the backend is unavailable.
+   */
+  useBackendOcr?: boolean;
 }
 
 type CameraState = 'idle' | 'streaming' | 'preview';
@@ -49,7 +56,7 @@ type CameraState = 'idle' | 'streaming' | 'preview';
 /** Minimum OCR confidence (0–100) below which a retry with the next scale is attempted. */
 const CONFIDENCE_RETRY_THRESHOLD = 60;
 
-export default function CameraCapture({ onTextExtracted, onImageCaptured, onClose, title, hint, ocrLanguage, preprocessImage, ocrParams, ocrSecondPassParams, onConfidence, multiScaleImages, preprocessImageLight }: CameraCaptureProps) {
+export default function CameraCapture({ onTextExtracted, onImageCaptured, onClose, title, hint, ocrLanguage, preprocessImage, ocrParams, ocrSecondPassParams, onConfidence, multiScaleImages, preprocessImageLight, useBackendOcr }: CameraCaptureProps) {
   const { t } = useLanguage();
   const { isDark } = useTheme();
   const [cameraState, setCameraState] = useState<CameraState>('idle');
@@ -197,6 +204,36 @@ export default function CameraCapture({ onTextExtracted, onImageCaptured, onClos
     setError(null);
 
     try {
+      // --- Backend OCR path ---
+      // When useBackendOcr is enabled, try the Python backend first.
+      // The backend handles preprocessing, OCR, and parsing server-side.
+      // Falls back to client-side Tesseract.js if the backend is unavailable.
+      if (useBackendOcr) {
+        try {
+          const backendReady = await isBackendAvailable();
+          if (backendReady) {
+            setOcrProgress(10);
+            const bpResult = await extractBPFromBackend(imagePreview, lang);
+            setOcrProgress(100);
+
+            if (onConfidence) {
+              onConfidence(bpResult.confidence);
+            }
+            if (onImageCaptured) {
+              onImageCaptured(imagePreview);
+            }
+            onTextExtracted(
+              bpResult.raw_text || t('noTextDetected'),
+              bpResult.digit_only_text || undefined,
+            );
+            return;
+          }
+        } catch {
+          // Backend OCR failed; fall through to client-side Tesseract.js
+        }
+      }
+
+      // --- Client-side Tesseract.js fallback ---
       // Optionally preprocess the image (e.g. contrast enhancement for LCD displays)
       const ocrInput = preprocessImage ? await preprocessImage(imagePreview) : imagePreview;
 
