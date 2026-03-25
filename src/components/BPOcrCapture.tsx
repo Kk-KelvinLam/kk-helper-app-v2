@@ -258,8 +258,8 @@ export default function BPOcrCapture({
           </div>
         )}
         {modelError && (
-          <div className={`text-sm p-3 rounded-lg mb-4 ${isDark ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-600'}`}>
-            {modelError}
+          <div className={`text-sm p-3 rounded-lg mb-4 ${isDark ? 'bg-yellow-900/30 text-yellow-300' : 'bg-yellow-50 text-yellow-700'}`}>
+            {t('bpModelUnavailable')}
           </div>
         )}
 
@@ -370,7 +370,7 @@ export default function BPOcrCapture({
               </button>
               <button
                 onClick={runInference}
-                disabled={processing || !isReady}
+                disabled={processing || modelLoading}
                 className="flex-1 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {processing ? (
