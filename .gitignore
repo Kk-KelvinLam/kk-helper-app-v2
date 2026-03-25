@@ -29,3 +29,13 @@ coverage/
 # Logs
 logs/
 *.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+backend/venv/
+backend/.venv/
+.pytest_cache/
