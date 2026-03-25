@@ -44,9 +44,11 @@ interface CameraCaptureProps {
    */
   preprocessImageLight?: (dataUrl: string) => Promise<string>;
   /**
-   * When true, enables backend-based BP extraction. The component sends
-   * the raw image to the Python backend for preprocessing, OCR, and parsing.
+   * When true (the default), enables backend-based OCR extraction.
+   * The component sends the raw image to the Python backend for
+   * preprocessing, OCR, and parsing.
    * Falls back to client-side Tesseract.js if the backend is unavailable.
+   * @default true
    */
   useBackendOcr?: boolean;
 }
@@ -56,7 +58,7 @@ type CameraState = 'idle' | 'streaming' | 'preview';
 /** Minimum OCR confidence (0–100) below which a retry with the next scale is attempted. */
 const CONFIDENCE_RETRY_THRESHOLD = 60;
 
-export default function CameraCapture({ onTextExtracted, onImageCaptured, onClose, title, hint, ocrLanguage, preprocessImage, ocrParams, ocrSecondPassParams, onConfidence, multiScaleImages, preprocessImageLight, useBackendOcr }: CameraCaptureProps) {
+export default function CameraCapture({ onTextExtracted, onImageCaptured, onClose, title, hint, ocrLanguage, preprocessImage, ocrParams, ocrSecondPassParams, onConfidence, multiScaleImages, preprocessImageLight, useBackendOcr = true }: CameraCaptureProps) {
   const { t } = useLanguage();
   const { isDark } = useTheme();
   const [cameraState, setCameraState] = useState<CameraState>('idle');
@@ -204,9 +206,9 @@ export default function CameraCapture({ onTextExtracted, onImageCaptured, onClos
     setError(null);
 
     try {
-      // --- Backend OCR path ---
-      // When useBackendOcr is enabled, try the Python backend first.
-      // The backend handles preprocessing, OCR, and parsing server-side.
+      // --- Backend OCR path (default) ---
+      // The backend handles preprocessing, OCR, and parsing server-side,
+      // including ML-based BP monitor image classification.
       // Falls back to client-side Tesseract.js if the backend is unavailable.
       if (useBackendOcr) {
         try {

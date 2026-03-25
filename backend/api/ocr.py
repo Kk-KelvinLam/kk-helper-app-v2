@@ -3,12 +3,14 @@
 from fastapi import APIRouter, HTTPException
 
 from backend.models.schemas import (
+    BPClassifyRequest,
+    BPClassifyResponse,
     BPExtractionRequest,
     BPExtractionResponse,
     OcrRequest,
     OcrResponse,
 )
-from backend.services import bp_parser, image_preprocessor, ocr_service
+from backend.services import bp_classifier, bp_parser, image_preprocessor, ocr_service
 
 router = APIRouter(prefix="/api/ocr", tags=["OCR"])
 
@@ -39,14 +41,20 @@ async def extract_bp(request: BPExtractionRequest) -> BPExtractionResponse:
     """Extract blood pressure values from a monitor photo.
 
     Performs the full pipeline:
-    1. Image preprocessing (contrast enhancement, binarisation)
-    2. Dual-pass OCR (full text + digit-only)
-    3. BP text parsing (3-strategy extraction)
+    1. ML-based image classification (BP monitor detection)
+    2. Image preprocessing (contrast enhancement, binarisation)
+    3. Dual-pass OCR (full text + digit-only)
+    4. BP text parsing (3-strategy extraction)
 
     Returns structured BP data with systolic, diastolic, heart rate,
-    and metadata.
+    classification result, and metadata.
     """
     try:
+        # Step 0: Classify image using ML feature extraction
+        classification = bp_classifier.classify_bp_image(request.image)
+        is_bp_monitor = classification["is_bp_monitor"]
+        bp_monitor_confidence = classification["confidence"]
+
         # Step 1: Preprocess the image for LCD display OCR
         preprocessed = image_preprocessor.preprocess_bp_image(request.image)
 
@@ -89,10 +97,36 @@ async def extract_bp(request: BPExtractionRequest) -> BPExtractionResponse:
             raw_text=primary_text,
             digit_only_text=digit_only_text or "",
             confidence=confidence,
+            is_bp_monitor=is_bp_monitor,
+            bp_monitor_confidence=bp_monitor_confidence,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(
             status_code=500, detail=f"BP extraction failed: {exc}"
+        ) from exc
+
+
+@router.post("/classify", response_model=BPClassifyResponse)
+async def classify_bp(request: BPClassifyRequest) -> BPClassifyResponse:
+    """Classify whether an image contains a blood pressure monitor display.
+
+    Uses ML-based feature extraction (LCD tint detection, seven-segment
+    pattern analysis, edge density distribution, rectangular display
+    detection, and digit-like component counting) to determine if the
+    image is of a BP monitor.
+    """
+    try:
+        result = bp_classifier.classify_bp_image(request.image)
+        return BPClassifyResponse(
+            is_bp_monitor=result["is_bp_monitor"],
+            confidence=result["confidence"],
+            features=result["features"],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Classification failed: {exc}"
         ) from exc

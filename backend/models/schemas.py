@@ -54,6 +54,38 @@ class BPExtractionResponse(BaseModel):
         default="", description="Raw OCR text from digit-only pass"
     )
     confidence: float = Field(default=0.0, description="OCR confidence score (0-100)")
+    is_bp_monitor: bool | None = Field(
+        default=None,
+        description="Whether the image was classified as a BP monitor display",
+    )
+    bp_monitor_confidence: float | None = Field(
+        default=None,
+        description="BP monitor classification confidence (0.0-1.0)",
+    )
+
+
+class BPClassifyRequest(BaseModel):
+    """Request body for BP monitor image classification."""
+
+    image: str = Field(
+        ...,
+        description="Base64-encoded image data (with or without data-URL prefix)",
+    )
+
+
+class BPClassifyResponse(BaseModel):
+    """Response body for BP monitor image classification."""
+
+    is_bp_monitor: bool = Field(
+        description="Whether the image is classified as a BP monitor display"
+    )
+    confidence: float = Field(
+        description="Classification confidence (0.0-1.0)"
+    )
+    features: dict[str, float] = Field(
+        default_factory=dict,
+        description="Individual feature scores for debugging",
+    )
 
 
 class HealthResponse(BaseModel):
