@@ -6,8 +6,17 @@
  * is unavailable.
  */
 
-/** Base URL for the OCR backend API. Configured via environment variable. */
-const OCR_API_URL = import.meta.env.VITE_OCR_API_URL as string | undefined;
+/**
+ * Base URL for the OCR backend API.
+ *
+ * When {@link VITE_OCR_API_URL} is set (e.g. `http://localhost:8000` during
+ * local development), requests are sent to that absolute URL.
+ *
+ * When it is **not** set (typical production deploy), an empty string is used
+ * so that requests go to the same origin.  Firebase Hosting rewrites
+ * `/api/**` to the Cloud Run backend service, making this work transparently.
+ */
+const OCR_API_URL: string = (import.meta.env.VITE_OCR_API_URL as string | undefined) ?? '';
 
 /** Timeout in milliseconds for backend API requests. */
 const API_TIMEOUT_MS = 30_000;
@@ -51,8 +60,6 @@ interface HealthResponse {
  * Check whether the OCR backend is configured and available.
  */
 export async function isBackendAvailable(): Promise<boolean> {
-  if (!OCR_API_URL) return false;
-
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
@@ -83,10 +90,6 @@ export async function extractTextFromBackend(
   imageDataUrl: string,
   language: string = 'eng',
 ): Promise<OcrApiResponse> {
-  if (!OCR_API_URL) {
-    throw new Error('OCR backend URL not configured');
-  }
-
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
 
@@ -128,10 +131,6 @@ export async function extractBPFromBackend(
   imageDataUrl: string,
   language: string = 'eng+chi_tra+chi_sim',
 ): Promise<BPExtractionApiResponse> {
-  if (!OCR_API_URL) {
-    throw new Error('OCR backend URL not configured');
-  }
-
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
 
@@ -172,10 +171,6 @@ export async function extractBPFromBackend(
 export async function classifyBPImage(
   imageDataUrl: string,
 ): Promise<BPClassifyApiResponse> {
-  if (!OCR_API_URL) {
-    throw new Error('OCR backend URL not configured');
-  }
-
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
 
