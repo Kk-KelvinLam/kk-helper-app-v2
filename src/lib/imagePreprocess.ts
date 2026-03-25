@@ -84,6 +84,195 @@ export async function generateMultiScaleImages(dataUrl: string): Promise<string[
   });
 }
 
+/**
+ * Light preprocessing — contrast-enhanced grayscale **without** binarisation.
+ *
+ * Tesseract sometimes performs better on high-contrast grayscale images than
+ * on hard-thresholded bitmaps, especially when the binarisation threshold
+ * is imperfect.  This variant runs the same pipeline as the full
+ * `preprocessBPImage` but stops before adaptive thresholding:
+ *
+ * 1. Scale up small images
+ * 2. Intelligent channel selection
+ * 3. Screen crop
+ * 4. Contrast stretch
+ * 5. Sharpening
+ *
+ * Returns the contrast-enhanced grayscale image as a PNG data-URL.
+ */
+export async function preprocessBPImageLight(dataUrl: string): Promise<string> {
+  const img = await loadImage(dataUrl);
+  const scale = img.width < MIN_WIDTH ? Math.ceil(MIN_WIDTH / img.width) : 1;
+  let w = img.width * scale;
+  let h = img.height * scale;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return dataUrl;
+
+  ctx.imageSmoothingEnabled = scale <= 2;
+  ctx.drawImage(img, 0, 0, w, h);
+
+  let imageData = ctx.getImageData(0, 0, w, h);
+  let data = imageData.data;
+
+  // Channel selection
+  const bestChannel = selectBestChannel(data);
+  for (let i = 0; i < data.length; i += 4) {
+    const v = data[i + bestChannel];
+    data[i] = data[i + 1] = data[i + 2] = v;
+  }
+
+  // Screen crop
+  const region = detectScreenRegion(data, w, h);
+  if (region) {
+    ctx.putImageData(imageData, 0, 0);
+    const croppedImageData = ctx.getImageData(region.x, region.y, region.w, region.h);
+    canvas.width = region.w;
+    canvas.height = region.h;
+    w = region.w;
+    h = region.h;
+    ctx.putImageData(croppedImageData, 0, 0);
+    imageData = croppedImageData;
+    data = imageData.data;
+  }
+
+  // Contrast stretch
+  applyContrastStretch(data, 1);
+
+  // Sharpen
+  applyUnsharpMask(data, w, h);
+
+  ctx.putImageData(imageData, 0, 0);
+  return canvas.toDataURL('image/png');
+}
+
+// ---------------------------------------------------------------------------
+// Strip-based image segmentation
+// ---------------------------------------------------------------------------
+
+/** Metadata for a horizontal strip extracted from a preprocessed image. */
+export interface ImageStrip {
+  /** PNG data-URL of the strip image. */
+  dataUrl: string;
+  /** Vertical position (px) of the strip's top edge in the source image. */
+  y: number;
+  /** Height (px) of the content region (excluding padding). */
+  height: number;
+}
+
+/**
+ * Split a preprocessed (binarised) image into horizontal strips, one per
+ * content row, using horizontal projection profiles.
+ *
+ * BP monitors display digits in 2–3 discrete rows.  By splitting the
+ * preprocessed image and OCR-ing each strip individually with
+ * PSM 7 (single text line), Tesseract produces significantly better
+ * results than OCR-ing the full image with PSM 6 (uniform block).
+ *
+ * @returns Array of {@link ImageStrip} objects ordered top-to-bottom.
+ *   Returns an empty array if fewer than 2 content rows are detected.
+ */
+export async function extractImageStrips(dataUrl: string): Promise<ImageStrip[]> {
+  const img = await loadImage(dataUrl);
+  const w = img.width;
+  const h = img.height;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return [];
+
+  ctx.drawImage(img, 0, 0);
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const data = imageData.data;
+
+  // Horizontal projection: fraction of dark pixels per row
+  const projection = new Float64Array(h);
+  for (let y = 0; y < h; y++) {
+    let dark = 0;
+    for (let x = 0; x < w; x++) {
+      if (data[(y * w + x) * 4] < 128) dark++;
+    }
+    projection[y] = dark / w;
+  }
+
+  // Smooth projection with a small window to bridge thin gaps between
+  // segments of the same row (e.g. horizontal gaps in "8").
+  const smoothWin = Math.max(1, Math.floor(h * 0.01));
+  const smoothed = new Float64Array(h);
+  for (let y = 0; y < h; y++) {
+    let s = 0;
+    let c = 0;
+    for (let j = Math.max(0, y - smoothWin); j <= Math.min(h - 1, y + smoothWin); j++) {
+      s += projection[j];
+      c++;
+    }
+    smoothed[y] = s / c;
+  }
+
+  // Threshold: rows with > 1 % of dark pixels are considered content
+  const CONTENT_THRESHOLD = 0.01;
+  // Minimum strip height: 3 % of image height (filters tiny noise blobs)
+  const MIN_STRIP_HEIGHT = Math.max(4, Math.floor(h * 0.03));
+  // Maximum gap inside a single row (e.g. space between "1" segments)
+  const MAX_GAP = Math.max(4, Math.floor(h * 0.04));
+
+  // Identify raw content runs
+  const rawRuns: Array<{ start: number; end: number }> = [];
+  let inRun = false;
+  let runStart = 0;
+  for (let y = 0; y < h; y++) {
+    if (smoothed[y] > CONTENT_THRESHOLD) {
+      if (!inRun) { inRun = true; runStart = y; }
+    } else {
+      if (inRun) {
+        inRun = false;
+        rawRuns.push({ start: runStart, end: y - 1 });
+      }
+    }
+  }
+  if (inRun) rawRuns.push({ start: runStart, end: h - 1 });
+
+  // Merge runs separated by small gaps (< MAX_GAP) — they belong to the
+  // same digit row (e.g. vertical gap between "1" and "2" in "120").
+  const merged: Array<{ start: number; end: number }> = [];
+  for (const run of rawRuns) {
+    if (merged.length > 0 && run.start - merged[merged.length - 1].end <= MAX_GAP) {
+      merged[merged.length - 1].end = run.end;
+    } else {
+      merged.push({ ...run });
+    }
+  }
+
+  // Filter out tiny strips (noise)
+  const strips = merged.filter((r) => r.end - r.start + 1 >= MIN_STRIP_HEIGHT);
+
+  if (strips.length < 2) return [];
+
+  // Extract each strip as a separate image with vertical padding
+  const PAD = Math.max(8, Math.floor(h * 0.03));
+  return strips.map((strip) => {
+    const sy = Math.max(0, strip.start - PAD);
+    const sh = Math.min(h, strip.end + PAD + 1) - sy;
+
+    const stripCanvas = document.createElement('canvas');
+    stripCanvas.width = w;
+    stripCanvas.height = sh;
+    const stripCtx = stripCanvas.getContext('2d')!;
+    stripCtx.drawImage(img, 0, sy, w, sh, 0, 0, w, sh);
+
+    return {
+      dataUrl: stripCanvas.toDataURL('image/png'),
+      y: strip.start,
+      height: strip.end - strip.start + 1,
+    };
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Core pipeline
 // ---------------------------------------------------------------------------
