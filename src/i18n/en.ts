@@ -121,6 +121,12 @@ const en = {
   testingMode: 'Testing Mode',
   testingModeHint: 'Show debug info for OCR and experimental features',
   appVersion: 'Version',
+  backendApiUrl: 'Backend API URL',
+  backendApiUrlHint: 'Custom URL for the OCR backend (leave blank for default)',
+  backendApiUrlPlaceholder: 'e.g. http://localhost:8000',
+  backendApiUrlSave: 'Save',
+  backendApiUrlSaved: 'Saved',
+  backendApiUrlClear: 'Clear',
 
   // Profile & Sharing
   navProfile: 'Profile',

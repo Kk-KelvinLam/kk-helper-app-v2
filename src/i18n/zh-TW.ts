@@ -121,6 +121,12 @@ const zhTW = {
   testingMode: '測試模式',
   testingModeHint: '顯示 OCR 除錯資訊及實驗功能',
   appVersion: '版本',
+  backendApiUrl: '後端 API 網址',
+  backendApiUrlHint: '自訂 OCR 後端網址（留空使用預設）',
+  backendApiUrlPlaceholder: '例如 http://localhost:8000',
+  backendApiUrlSave: '儲存',
+  backendApiUrlSaved: '已儲存',
+  backendApiUrlClear: '清除',
 
   // Profile & Sharing
   navProfile: '個人',
