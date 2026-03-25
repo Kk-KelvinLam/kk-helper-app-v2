@@ -9,7 +9,7 @@
     "rewrites": [
       {
         "source": "/models/**",
-        "destination": "/public/**"
+        "destination": "/public/models/**"
       },
       {
         "source": "**",
