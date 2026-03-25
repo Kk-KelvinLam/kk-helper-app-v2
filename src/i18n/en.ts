@@ -219,6 +219,7 @@ const en = {
   bpSaveError: 'Failed to save reading. Please try again.',
   bpScanReading: 'Scan BP Monitor',
   bpCaptureHint: 'Take a photo of your blood pressure monitor to auto-fill readings',
+  bpModelUnavailable: 'On-device model unavailable — will use server OCR instead.',
 
   // OCR debug
   ocrRawText: 'OCR Raw Text',

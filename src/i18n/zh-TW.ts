@@ -219,6 +219,7 @@ const zhTW = {
   bpSaveError: '儲存量測紀錄失敗，請重試。',
   bpScanReading: '掃描血壓機',
   bpCaptureHint: '拍攝血壓機螢幕以自動填寫數值',
+  bpModelUnavailable: '本機模型無法載入，將改用 Tesseract.js 辨識。',
 
   // OCR debug
   ocrRawText: 'OCR 原始文字',

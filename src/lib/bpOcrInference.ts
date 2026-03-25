@@ -64,9 +64,12 @@ export async function loadBPModel(
 
       const model = await tf.loadLayersModel(modelUrl);
       cachedModel = model;
-      loadingPromise = null;
       return model;
-    })();
+    })().catch((err) => {
+      // Clear so callers can retry after a transient failure.
+      loadingPromise = null;
+      throw err;
+    });
   }
 
   return loadingPromise;
