@@ -9,6 +9,10 @@ import {
   parsePriceTagText,
   parseBPText,
   normalizeBPText,
+  detectIrregularHeartbeat,
+  stripDateTimePatterns,
+  parseBPFromWords,
+  type OcrWord,
 } from '@/lib/ocrParser';
 
 describe('ocrParser', () => {
@@ -718,6 +722,213 @@ describe('ocrParser', () => {
         systolic: '135', diastolic: '88', heartRate: '72',
       }));
       expect(result.strategy).toBe(3);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  describe('detectIrregularHeartbeat', () => {
+    it('detects English IHB text', () => {
+      expect(detectIrregularHeartbeat('SYS 120 DIA 80 PUL 72 IHB')).toBe(true);
+    });
+
+    it('detects IHB case-insensitively', () => {
+      expect(detectIrregularHeartbeat('ihb detected')).toBe(true);
+    });
+
+    it('detects Traditional Chinese 不規則', () => {
+      expect(detectIrregularHeartbeat('心律不規則')).toBe(true);
+    });
+
+    it('detects Simplified Chinese 不规则', () => {
+      expect(detectIrregularHeartbeat('心律不规则')).toBe(true);
+    });
+
+    it('returns false when no IHB indicator is present', () => {
+      expect(detectIrregularHeartbeat('SYS 120 DIA 80 PUL 72')).toBe(false);
+    });
+
+    it('returns false for empty string', () => {
+      expect(detectIrregularHeartbeat('')).toBe(false);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  describe('stripDateTimePatterns', () => {
+    it('strips ISO-style date (2024/01/15)', () => {
+      const result = stripDateTimePatterns('2024/01/15 120 80 72');
+      expect(result).not.toContain('2024');
+      expect(result).toContain('120');
+    });
+
+    it('strips date with hyphens (2024-01-15)', () => {
+      const result = stripDateTimePatterns('2024-01-15 120');
+      expect(result).not.toContain('2024');
+    });
+
+    it('strips reversed date (15/01/2024)', () => {
+      const result = stripDateTimePatterns('15/01/2024 120 80');
+      expect(result).not.toContain('2024');
+    });
+
+    it('strips time patterns (12:30)', () => {
+      const result = stripDateTimePatterns('12:30 120 80 72');
+      expect(result).not.toContain('12:30');
+      expect(result).toContain('120');
+    });
+
+    it('strips standalone 4-digit years', () => {
+      const result = stripDateTimePatterns('2024 120 80 72');
+      expect(result).not.toContain('2024');
+      expect(result).toContain('120');
+    });
+
+    it('does not strip non-date numbers', () => {
+      const result = stripDateTimePatterns('120 80 72');
+      expect(result).toContain('120');
+      expect(result).toContain('80');
+      expect(result).toContain('72');
+    });
+
+    it('handles combined date and time', () => {
+      const result = stripDateTimePatterns('2024/03/15 08:30 120 80 72');
+      expect(result).toContain('120');
+      expect(result).toContain('80');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  describe('parseBPText — IHB detection', () => {
+    it('sets irregularHeartbeat when IHB text is present', () => {
+      const result = parseBPText('SYS 120 DIA 80 PUL 72 IHB');
+      expect(result.irregularHeartbeat).toBe(true);
+      expect(result.systolic).toBe('120');
+    });
+
+    it('does not set irregularHeartbeat when IHB is absent', () => {
+      const result = parseBPText('SYS 120 DIA 80 PUL 72');
+      expect(result.irregularHeartbeat).toBeUndefined();
+    });
+
+    it('detects IHB with Chinese text', () => {
+      const result = parseBPText('高压 120\n低压 80\n脉搏 72\n不规则');
+      expect(result.irregularHeartbeat).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  describe('parseBPText — date/time filtering', () => {
+    it('filters out 4-digit years in Strategy 3 number extraction', () => {
+      const result = parseBPText('2024\n120\n80\n72');
+      expect(result.systolic).toBe('120');
+      expect(result.diastolic).toBe('80');
+      expect(result.heartRate).toBe('72');
+    });
+
+    it('filters date patterns with slashes (2024/01/15)', () => {
+      const result = parseBPText('2024/01/15\n135\n88\n72');
+      expect(result.systolic).toBe('135');
+      expect(result.diastolic).toBe('88');
+    });
+
+    it('filters time patterns (12:30)', () => {
+      const result = parseBPText('12:30\n120\n80\n72');
+      expect(result.systolic).toBe('120');
+      expect(result.diastolic).toBe('80');
+    });
+
+    it('does not interfere with labeled patterns (Strategy 1)', () => {
+      const result = parseBPText('2024/01/15 SYS 120 DIA 80 PUL 72');
+      expect(result.systolic).toBe('120');
+      expect(result.diastolic).toBe('80');
+      expect(result.heartRate).toBe('72');
+      expect(result.strategy).toBe(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  describe('parseBPText — edge cases', () => {
+    it('handles completely blank text', () => {
+      const result = parseBPText('   \n\n  ');
+      expect(result.systolic).toBe('');
+      expect(result.diastolic).toBe('');
+      expect(result.heartRate).toBe('');
+    });
+
+    it('handles error codes like "E1" or "Er"', () => {
+      const result = parseBPText('E1');
+      expect(result.systolic).toBe('');
+      expect(result.diastolic).toBe('');
+    });
+
+    it('handles error code "Er" without crashing', () => {
+      const result = parseBPText('Er\nE2');
+      expect(result.systolic).toBe('');
+    });
+
+    it('handles numbers outside physiological range', () => {
+      const result = parseBPText('300\n10\n5');
+      expect(result.systolic).toBe('');
+      expect(result.diastolic).toBe('');
+    });
+
+    it('handles single number input', () => {
+      const result = parseBPText('120');
+      expect(result.systolic).toBe('');
+      expect(result.diastolic).toBe('');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  describe('parseBPFromWords', () => {
+    function makeWord(text: string, y0: number, y1: number, confidence: number = 90): OcrWord {
+      return {
+        text,
+        confidence,
+        bbox: { x0: 10, y0, x1: 100, y1 },
+      };
+    }
+
+    it('assigns systolic/diastolic/HR by bounding box height', () => {
+      const words: OcrWord[] = [
+        makeWord('120', 10, 80),   // tallest → systolic
+        makeWord('80', 100, 150),  // medium → diastolic
+        makeWord('72', 170, 200),  // smallest → heart rate
+      ];
+      const result = parseBPFromWords(words, '120\n80\n72');
+      expect(result).toEqual(expect.objectContaining({
+        systolic: '120', diastolic: '80', heartRate: '72',
+      }));
+    });
+
+    it('filters out low-confidence words', () => {
+      const words: OcrWord[] = [
+        makeWord('120', 10, 80, 90),
+        makeWord('80', 100, 150, 90),
+        makeWord('23', 170, 200, 30),  // low confidence — should be filtered
+      ];
+      const result = parseBPFromWords(words, '120\n80\n23');
+      expect(result.systolic).toBe('120');
+      expect(result.diastolic).toBe('80');
+    });
+
+    it('falls back to parseBPText when insufficient digit words', () => {
+      const words: OcrWord[] = [
+        makeWord('hello', 10, 50, 90),
+      ];
+      const result = parseBPFromWords(words, 'SYS 120 DIA 80 PUL 72');
+      expect(result.systolic).toBe('120');
+      expect(result.strategy).toBe(1);
+    });
+
+    it('detects IHB from word-level text', () => {
+      const words: OcrWord[] = [
+        makeWord('120', 10, 80),
+        makeWord('80', 100, 150),
+        makeWord('72', 170, 200),
+        makeWord('IHB', 210, 230, 80),
+      ];
+      const result = parseBPFromWords(words, '120\n80\n72\nIHB');
+      expect(result.irregularHeartbeat).toBe(true);
     });
   });
 });

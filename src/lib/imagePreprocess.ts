@@ -7,15 +7,18 @@
  * Preprocessing converts the image to a high-contrast black-on-white bitmap
  * so Tesseract can recognise the text more reliably.
  *
- * Pipeline (v4 — with LCD screen cropping + local adaptive binarisation):
+ * Pipeline (v5 — with intelligent channel selection, sharpening, multi-scale,
+ * glare detection, and deskew):
  * 1. Scale up small images for better OCR resolution.
- * 2. Extract the green channel (best contrast for green-tinted LCD panels).
+ * 2. Intelligent channel selection (detect LCD tint: green/blue/white/orange).
  * 3. Detect and crop to the LCD screen region (reduces noise from device
  *    body, table, and other background elements).
  * 4. Contrast stretching with percentile clipping (robust to outliers).
- * 5. Local adaptive binarisation (integral-image local mean).
- * 6. Morphological closing (dilate → erode) to fill segment gaps.
- * 7. Inversion check — ensure dark text on white background.
+ * 5. Sharpening (unsharp mask to restore blurry LCD segment edges).
+ * 6. Local adaptive binarisation (integral-image local mean).
+ * 7. Deskew (gradient-based skew detection + affine correction).
+ * 8. Morphological closing (dilate → erode) to fill segment gaps.
+ * 9. Inversion check — ensure dark text on white background.
  */
 
 // ---------------------------------------------------------------------------
@@ -26,6 +29,14 @@
 export interface PreprocessingStep {
   label: string;
   dataUrl: string;
+}
+
+/** Result of glare detection on the LCD region. */
+export interface GlareDetectionResult {
+  /** Whether significant glare/hotspot was detected. */
+  hasGlare: boolean;
+  /** Fraction of pixels near saturation (0–1). */
+  glareFraction: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -48,8 +59,29 @@ export async function preprocessBPImage(dataUrl: string): Promise<string> {
 export async function preprocessBPImageWithSteps(dataUrl: string): Promise<{
   result: string;
   steps: PreprocessingStep[];
+  glare?: GlareDetectionResult;
 }> {
   return preprocessBPImageCore(dataUrl, true);
+}
+
+/**
+ * Generate multiple scaled versions of a preprocessed BP image for
+ * multi-scale OCR.  Returns an array of PNG data-URLs at scales
+ * 1×, 1.5×, and 2×.
+ */
+export async function generateMultiScaleImages(dataUrl: string): Promise<string[]> {
+  const scales = [1, 1.5, 2];
+  const img = await loadImage(dataUrl);
+
+  return scales.map((scale) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(img.width * scale);
+    canvas.height = Math.round(img.height * scale);
+    const ctx = canvas.getContext('2d')!;
+    ctx.imageSmoothingEnabled = scale <= 1;
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/png');
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -69,7 +101,7 @@ const MIN_CROP_FRACTION = 0.05;
 async function preprocessBPImageCore(
   dataUrl: string,
   collectSteps: boolean,
-): Promise<{ result: string; steps: PreprocessingStep[] }> {
+): Promise<{ result: string; steps: PreprocessingStep[]; glare?: GlareDetectionResult }> {
   const steps: PreprocessingStep[] = [];
   const img = await loadImage(dataUrl);
 
@@ -97,17 +129,20 @@ async function preprocessBPImageCore(
   let imageData = ctx.getImageData(0, 0, width, height);
   let data = imageData.data;
 
-  // --- Step 1: Green channel extraction ---
-  // LCD panels are typically green-tinted; the green channel provides the best
-  // contrast between the bright background and dark digit segments.
+  // --- Step 1: Intelligent channel selection ---
+  // Detect the dominant LCD tint colour and pick the channel with best
+  // digit-to-background contrast.  Falls back to green channel for
+  // traditional green-tinted LCD panels.
+  const bestChannel = selectBestChannel(data);
   for (let i = 0; i < data.length; i += 4) {
-    const green = data[i + 1];
-    data[i] = data[i + 1] = data[i + 2] = green;
+    const v = data[i + bestChannel];
+    data[i] = data[i + 1] = data[i + 2] = v;
   }
 
   if (collectSteps) {
+    const channelNames = ['Red', 'Green', 'Blue'];
     ctx.putImageData(imageData, 0, 0);
-    steps.push({ label: 'Green Channel', dataUrl: canvas.toDataURL('image/png') });
+    steps.push({ label: `${channelNames[bestChannel]} Channel`, dataUrl: canvas.toDataURL('image/png') });
   }
 
   // --- Step 2: Detect and crop to LCD screen region ---
@@ -119,7 +154,7 @@ async function preprocessBPImageCore(
     ctx.putImageData(imageData, 0, 0);
 
     if (collectSteps) {
-      // Draw crop-region overlay on the green-channel image so the user can
+      // Draw crop-region overlay on the channel image so the user can
       // see exactly where the algorithm decided to crop.
       const overlayCanvas = document.createElement('canvas');
       overlayCanvas.width = width;
@@ -149,6 +184,9 @@ async function preprocessBPImageCore(
     steps.push({ label: 'Screen Crop (skipped)', dataUrl: canvas.toDataURL('image/png') });
   }
 
+  // --- Step 2b: Glare/hotspot detection ---
+  const glare = detectGlare(data);
+
   // --- Step 3: Contrast stretching with percentile clipping ---
   applyContrastStretch(data, 1);
 
@@ -157,7 +195,15 @@ async function preprocessBPImageCore(
     steps.push({ label: 'Contrast Stretched', dataUrl: canvas.toDataURL('image/png') });
   }
 
-  // --- Step 4: Local adaptive binarisation ---
+  // --- Step 4: Sharpening (unsharp mask) ---
+  applyUnsharpMask(data, width, height);
+
+  if (collectSteps) {
+    ctx.putImageData(imageData, 0, 0);
+    steps.push({ label: 'Sharpened', dataUrl: canvas.toDataURL('image/png') });
+  }
+
+  // --- Step 5: Local adaptive binarisation ---
   // Uses an integral-image local mean to compute a per-pixel threshold.
   // Pixels significantly darker than their local neighbourhood are classified
   // as foreground (digit segments).  This avoids the failure mode of global
@@ -170,7 +216,22 @@ async function preprocessBPImageCore(
     steps.push({ label: 'Binarised (adaptive)', dataUrl: canvas.toDataURL('image/png') });
   }
 
-  // --- Step 5: Morphological closing (dilate then erode, 3×3 kernel) ---
+  // --- Step 6: Deskew ---
+  const skewAngle = detectSkewAngle(data, width, height);
+  if (Math.abs(skewAngle) > 0.5) {
+    // Apply affine rotation to straighten the image
+    const rotated = rotateImage(data, width, height, -skewAngle);
+    for (let i = 0; i < data.length; i++) {
+      data[i] = rotated[i];
+    }
+
+    if (collectSteps) {
+      ctx.putImageData(imageData, 0, 0);
+      steps.push({ label: `Deskewed (${skewAngle.toFixed(1)}°)`, dataUrl: canvas.toDataURL('image/png') });
+    }
+  }
+
+  // --- Step 7: Morphological closing (dilate then erode, 3×3 kernel) ---
   // Fills tiny gaps between LCD segments so digits appear solid to Tesseract.
   morphDilate(data, width, height);
   morphErode(data, width, height);
@@ -180,7 +241,7 @@ async function preprocessBPImageCore(
     steps.push({ label: 'Morph. Closing', dataUrl: canvas.toDataURL('image/png') });
   }
 
-  // --- Step 6: Inversion check ---
+  // --- Step 8: Inversion check ---
   // Tesseract expects dark text on a white background.  If more than half the
   // pixels are dark, the polarity is wrong and we invert.
   let darkCount = 0;
@@ -205,7 +266,237 @@ async function preprocessBPImageCore(
     steps.push({ label: 'Final', dataUrl: result });
   }
 
-  return { result, steps };
+  return { result, steps, glare };
+}
+
+// ---------------------------------------------------------------------------
+// New processing helpers (v5)
+// ---------------------------------------------------------------------------
+
+/**
+ * Intelligent channel selection — detects the dominant LCD tint colour
+ * and returns the channel index (0=R, 1=G, 2=B) with the highest
+ * digit-to-background contrast.
+ *
+ * LCD displays come in several tint variants:
+ * - Green (most common) → green channel has best contrast
+ * - Blue → blue channel
+ * - White/grey → green channel (usually the most balanced)
+ * - Orange → red channel
+ *
+ * The heuristic computes each channel's standard deviation (a proxy for
+ * contrast) and returns the channel with the highest value.
+ */
+function selectBestChannel(data: Uint8ClampedArray): number {
+  const totalPixels = data.length / 4;
+  const sums = [0, 0, 0];
+  const sqSums = [0, 0, 0];
+
+  for (let i = 0; i < data.length; i += 4) {
+    for (let c = 0; c < 3; c++) {
+      const v = data[i + c];
+      sums[c] += v;
+      sqSums[c] += v * v;
+    }
+  }
+
+  let bestChannel = 1; // default green
+  let bestStdDev = 0;
+
+  for (let c = 0; c < 3; c++) {
+    const mean = sums[c] / totalPixels;
+    const variance = sqSums[c] / totalPixels - mean * mean;
+    const stdDev = Math.sqrt(Math.max(0, variance));
+    if (stdDev > bestStdDev) {
+      bestStdDev = stdDev;
+      bestChannel = c;
+    }
+  }
+
+  return bestChannel;
+}
+
+/**
+ * Detect glare/hotspot in the image.  If a significant portion of the
+ * LCD region has pixels near saturation (>240), the user should be warned
+ * to retake the photo.
+ *
+ * @returns Object with `hasGlare` flag and `glareFraction` (0–1).
+ */
+function detectGlare(data: Uint8ClampedArray): GlareDetectionResult {
+  const totalPixels = data.length / 4;
+  let nearWhiteCount = 0;
+  const GLARE_THRESHOLD = 240;
+
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i] > GLARE_THRESHOLD) {
+      nearWhiteCount++;
+    }
+  }
+
+  const glareFraction = nearWhiteCount / totalPixels;
+  return {
+    hasGlare: glareFraction > 0.8,
+    glareFraction,
+  };
+}
+
+/**
+ * Unsharp mask sharpening to restore blurry LCD segment edges.
+ *
+ * Computes a 3×3 box-blur approximation, then sharpens by:
+ *   sharpened = original + amount * (original − blurred)
+ *
+ * @param amount — sharpening strength (1.0 = moderate, 2.0 = strong)
+ */
+function applyUnsharpMask(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  amount: number = 1.0,
+): void {
+  // Create blurred copy using 3×3 box filter
+  const blurred = new Uint8Array(width * height);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let sum = 0;
+      let count = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const ny = y + dy;
+          const nx = x + dx;
+          if (ny >= 0 && ny < height && nx >= 0 && nx < width) {
+            sum += data[(ny * width + nx) * 4];
+            count++;
+          }
+        }
+      }
+      blurred[y * width + x] = Math.round(sum / count);
+    }
+  }
+
+  // Apply: sharpened = original + amount × (original − blurred)
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      const original = data[idx];
+      const blur = blurred[y * width + x];
+      const sharpened = Math.round(original + amount * (original - blur));
+      const clamped = Math.max(0, Math.min(255, sharpened));
+      data[idx] = data[idx + 1] = data[idx + 2] = clamped;
+    }
+  }
+}
+
+/**
+ * Detect skew angle of the binarised image using gradient-based
+ * Hough-like analysis.
+ *
+ * Scans the binarised image for horizontal edge transitions, then
+ * tests a range of small angles (−10° to +10°) to find the rotation
+ * that maximises horizontal alignment of edge pixels (i.e. produces
+ * the sharpest row projection peaks).
+ *
+ * Returns the estimated skew angle in degrees.
+ */
+function detectSkewAngle(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+): number {
+  // Collect edge pixel positions (foreground-to-background transitions)
+  const edgePixels: Array<{ x: number; y: number }> = [];
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const left = data[(y * width + (x - 1)) * 4];
+      const right = data[(y * width + (x + 1)) * 4];
+      // Detect horizontal edges (transitions between black and white)
+      if (Math.abs(left - right) > 200) {
+        edgePixels.push({ x, y });
+      }
+    }
+  }
+
+  if (edgePixels.length < 20) return 0;
+
+  // Sample edge pixels for speed (max 2000)
+  const sample = edgePixels.length > 2000
+    ? edgePixels.filter((_, i) => i % Math.ceil(edgePixels.length / 2000) === 0)
+    : edgePixels;
+
+  const cx = width / 2;
+  const cy = height / 2;
+
+  let bestAngle = 0;
+  let bestScore = 0;
+
+  // Test angles from −10° to +10° in 0.5° steps
+  for (let angleDeg = -10; angleDeg <= 10; angleDeg += 0.5) {
+    const rad = (angleDeg * Math.PI) / 180;
+    const cosA = Math.cos(rad);
+    const sinA = Math.sin(rad);
+
+    // Project edge pixels onto rows after rotation
+    const rowBins = new Map<number, number>();
+    for (const p of sample) {
+      const ry = Math.round((p.x - cx) * sinA + (p.y - cy) * cosA + cy);
+      rowBins.set(ry, (rowBins.get(ry) ?? 0) + 1);
+    }
+
+    // Score = sum of squared bin counts (sharper peaks = better alignment)
+    let score = 0;
+    for (const count of rowBins.values()) {
+      score += count * count;
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestAngle = angleDeg;
+    }
+  }
+
+  return bestAngle;
+}
+
+/**
+ * Rotate image data by a given angle (in degrees) around the centre.
+ * Returns a new Uint8ClampedArray with the rotated pixel data.
+ */
+function rotateImage(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  angleDeg: number,
+): Uint8ClampedArray {
+  const result = new Uint8ClampedArray(data.length);
+  // Fill with white (background)
+  result.fill(255);
+
+  const cx = width / 2;
+  const cy = height / 2;
+  const rad = (angleDeg * Math.PI) / 180;
+  const cosA = Math.cos(rad);
+  const sinA = Math.sin(rad);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      // Reverse-map: find source pixel for this destination pixel
+      const sx = Math.round((x - cx) * cosA + (y - cy) * sinA + cx);
+      const sy = Math.round(-(x - cx) * sinA + (y - cy) * cosA + cy);
+
+      if (sx >= 0 && sx < width && sy >= 0 && sy < height) {
+        const srcIdx = (sy * width + sx) * 4;
+        const dstIdx = (y * width + x) * 4;
+        result[dstIdx] = data[srcIdx];
+        result[dstIdx + 1] = data[srcIdx + 1];
+        result[dstIdx + 2] = data[srcIdx + 2];
+        result[dstIdx + 3] = data[srcIdx + 3];
+      }
+    }
+  }
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------

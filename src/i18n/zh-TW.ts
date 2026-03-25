@@ -218,6 +218,9 @@ const zhTW = {
   ocrRawText: 'OCR 原始文字',
   ocrStrategy: '使用策略',
   ocrPreprocessSteps: '影像前處理步驟',
+  ocrConfidence: '信心度',
+  glareWarning: '⚠️ 偵測到反光 — 請避免直射光線重新拍照以獲得更好的結果。',
+  irregularHeartbeat: '⚠️ 血壓計偵測到心律不整 (IHB)。',
 
   // Unit Price Calculator
   itemQuantityCount: '數量（件）',

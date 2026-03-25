@@ -218,6 +218,9 @@ const en = {
   ocrRawText: 'OCR Raw Text',
   ocrStrategy: 'Strategy Used',
   ocrPreprocessSteps: 'Preprocessing Steps',
+  ocrConfidence: 'Confidence',
+  glareWarning: '⚠️ Glare detected — for better results, retake the photo without direct light on the screen.',
+  irregularHeartbeat: '⚠️ Irregular heartbeat (IHB) detected by the monitor.',
 
   // Unit Price Calculator
   itemQuantityCount: 'Qty (pcs)',
