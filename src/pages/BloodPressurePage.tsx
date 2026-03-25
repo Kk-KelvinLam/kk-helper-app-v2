@@ -13,9 +13,9 @@ import {
 } from '@/lib/bloodPressure';
 import { getSharedWithMe } from '@/lib/sharing';
 import { parseBPText, type ParsedBPData } from '@/lib/ocrParser';
-import { preprocessBPImage, preprocessBPImageWithSteps, preprocessBPImageLight, generateMultiScaleImages, type PreprocessingStep, type GlareDetectionResult } from '@/lib/imagePreprocess';
 import { useTestingMode } from '@/contexts/TestingModeContext';
-import CameraCapture from '@/components/CameraCapture';
+import BPOcrCapture from '@/components/BPOcrCapture';
+import type { BPReading } from '@/lib/bpOcrUtils';
 import type { BloodPressureRecord, BloodPressureFormData, BPCategory, Gender, ShareRecord } from '@/types';
 import type { TranslationKeys } from '@/i18n';
 import { getUserProfile } from '@/lib/userProfile';
@@ -157,10 +157,6 @@ export default function BloodPressurePage() {
   const [ocrFilled, setOcrFilled] = useState(false);
   const [ocrDebugText, setOcrDebugText] = useState<string>('');
   const [ocrDebugParsed, setOcrDebugParsed] = useState<ParsedBPData | null>(null);
-  const [preprocessSteps, setPreprocessSteps] = useState<PreprocessingStep[]>([]);
-  const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
-  const [multiScaleImgs, setMultiScaleImgs] = useState<string[]>([]);
-  const [glareWarning, setGlareWarning] = useState<GlareDetectionResult | null>(null);
 
   // Form state
   const [formData, setFormData] = useState<BloodPressureFormData>({
@@ -259,28 +255,19 @@ export default function BloodPressurePage() {
     setFormData((prev) => ({ ...prev, imageUrl: imageDataUrl }));
   };
 
-  /** Wrap preprocessBPImage to capture intermediate step images in testing mode. */
-  const handlePreprocess = useCallback(async (dataUrl: string): Promise<string> => {
-    if (isTestingMode) {
-      const { result, steps, glare } = await preprocessBPImageWithSteps(dataUrl);
-      setPreprocessSteps(steps);
-      if (glare) setGlareWarning(glare);
-      // Generate multi-scale variants for confidence-based retry
-      const scales = await generateMultiScaleImages(result);
-      setMultiScaleImgs(scales);
-      return result;
+  /** Handle BPReading from TF.js client-side OCR */
+  const handleBPOcrResult = (reading: BPReading) => {
+    setFormData((prev) => ({
+      ...prev,
+      systolic: String(reading.systolic) || prev.systolic,
+      diastolic: String(reading.diastolic) || prev.diastolic,
+      heartRate: reading.pulse ? String(reading.pulse) : prev.heartRate,
+    }));
+    if (reading.systolic || reading.diastolic || reading.pulse) {
+      setOcrFilled(true);
     }
-    const result = await preprocessBPImage(dataUrl);
-    // Generate multi-scale variants for confidence-based retry
-    const scales = await generateMultiScaleImages(result);
-    setMultiScaleImgs(scales);
-    return result;
-  }, [isTestingMode]);
-
-  /** Light preprocessor — contrast-enhanced grayscale without binarisation. */
-  const handlePreprocessLight = useCallback(async (dataUrl: string): Promise<string> => {
-    return preprocessBPImageLight(dataUrl);
-  }, []);
+    setShowCamera(false);
+  };
 
   const handleSave = async () => {
     if (!user || !formData.systolic || !formData.diastolic || !formData.heartRate) return;
@@ -871,19 +858,6 @@ export default function BloodPressurePage() {
                 <div className={`flex items-center gap-2 text-sm p-3 rounded-lg ${isDark ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-green-700'}`}>
                   <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
                   {t('ocrFieldsFilled')}
-                  {ocrConfidence !== null && (
-                    <span className="ml-auto text-xs opacity-75">
-                      {t('ocrConfidence')}: {Math.round(ocrConfidence)}%
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {/* Glare warning */}
-              {glareWarning?.hasGlare && (
-                <div className={`flex items-center gap-2 text-sm p-3 rounded-lg ${isDark ? 'bg-yellow-900/30 text-yellow-300' : 'bg-yellow-50 text-yellow-700'}`}>
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                  {t('glareWarning')}
                 </div>
               )}
 
@@ -900,35 +874,11 @@ export default function BloodPressurePage() {
                 <div className={`text-xs p-3 rounded-lg space-y-2 ${isDark ? 'bg-orange-900/20 text-orange-300 border border-orange-800' : 'bg-orange-50 text-orange-800 border border-orange-200'}`}>
                   <div className="font-semibold flex items-center gap-1">
                     🧪 {t('ocrStrategy')}: {ocrDebugParsed.strategy ?? 'N/A'}
-                    {ocrConfidence !== null && ` | Confidence: ${Math.round(ocrConfidence)}%`}
                     {ocrDebugParsed.irregularHeartbeat && ' | IHB ⚠️'}
                   </div>
                   <div className="font-semibold">{t('ocrRawText')}:</div>
                   <pre className="whitespace-pre-wrap break-all max-h-32 overflow-y-auto">{ocrDebugText}</pre>
                   <div>SYS: {ocrDebugParsed.systolic || '—'} | DIA: {ocrDebugParsed.diastolic || '—'} | HR: {ocrDebugParsed.heartRate || '—'}</div>
-                </div>
-              )}
-
-              {/* Preprocessing Steps Debug (testing mode only) */}
-              {isTestingMode && preprocessSteps.length > 0 && (
-                <div className={`text-xs p-3 rounded-lg space-y-2 ${isDark ? 'bg-blue-900/20 text-blue-300 border border-blue-800' : 'bg-blue-50 text-blue-800 border border-blue-200'}`}>
-                  <div className="font-semibold flex items-center gap-1">
-                    🔬 {t('ocrPreprocessSteps')}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {preprocessSteps.map((step, idx) => (
-                      <div key={idx} className="space-y-1">
-                        <div className={`text-[10px] font-medium ${isDark ? 'text-blue-400' : 'text-blue-700'}`}>
-                          {idx + 1}. {step.label}
-                        </div>
-                        <img
-                          src={step.dataUrl}
-                          alt={step.label}
-                          className={`w-full rounded border object-contain max-h-28 ${isDark ? 'border-blue-800 bg-gray-900' : 'border-blue-200 bg-white'}`}
-                        />
-                      </div>
-                    ))}
-                  </div>
                 </div>
               )}
 
@@ -1004,22 +954,15 @@ export default function BloodPressurePage() {
         </div>
       )}
 
-      {/* Camera Capture for BP */}
+      {/* Camera Capture for BP – client-side TF.js OCR (primary) with Tesseract.js fallback */}
       {showCamera && (
-        <CameraCapture
-          onTextExtracted={handleBPTextExtracted}
+        <BPOcrCapture
+          onResult={handleBPOcrResult}
           onImageCaptured={handleBPImageCaptured}
           onClose={() => setShowCamera(false)}
           title={t('bpScanReading')}
           hint={t('bpCaptureHint')}
-          ocrLanguage="eng+chi_tra+chi_sim"
-          preprocessImage={handlePreprocess}
-          preprocessImageLight={handlePreprocessLight}
-          ocrParams={{ tessedit_pageseg_mode: '6' }}
-          ocrSecondPassParams={{ tessedit_pageseg_mode: '6', tessedit_char_whitelist: '0123456789' }}
-          onConfidence={setOcrConfidence}
-          multiScaleImages={multiScaleImgs}
-          useBackendOcr
+          onTextExtracted={handleBPTextExtracted}
         />
       )}
     </div>
