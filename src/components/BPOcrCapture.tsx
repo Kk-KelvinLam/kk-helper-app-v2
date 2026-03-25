@@ -1,12 +1,9 @@
 /**
- * Reusable React component for client-side blood-pressure OCR using
- * TensorFlow.js.
+ * Reusable React component for client-side blood-pressure OCR.
  *
- * Captures or uploads an image of an Omron LCD display, runs the CNN model
- * entirely in the browser (zero backend), and returns predicted SYS / DIA /
- * Pulse values to the parent via callbacks.
- *
- * npm install @tensorflow/tfjs @tensorflow/tfjs-backend-webgl
+ * Primary path: TensorFlow.js CNN model running entirely in the browser.
+ * Fallback path: Tesseract.js OCR with image preprocessing, used when the
+ * TF.js model files are unavailable (e.g. not yet deployed).
  *
  * @module BPOcrCapture
  */
@@ -15,8 +12,11 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Camera, Upload, X, Loader2 } from 'lucide-react';
+import Tesseract from 'tesseract.js';
 import { useBPModel } from '@/hooks/useBPModel';
 import { combineBPReadings, isPlausibleBPReading, type BPReading } from '@/lib/bpOcrUtils';
+import { preprocessBPImage, preprocessBPImageLight, extractImageStrips } from '@/lib/imagePreprocess';
+import { parseBPText } from '@/lib/ocrParser';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Props
@@ -160,12 +160,12 @@ export default function BPOcrCapture({
   /**
    * Run the TF.js CNN model on the captured image.
    *
-   * The model predicts a single value per image.  To obtain SYS + DIA we
-   * run inference twice if the user has provided separate crops; otherwise
-   * we treat the single prediction as the systolic reading.
+   * Primary path: TF.js CNN model (fast, runs entirely on-device).
+   * Fallback path: Tesseract.js OCR with BP image preprocessing, used when
+   * the TF.js model files are unavailable.
    */
   const runInference = async () => {
-    if (!imagePreview || !isReady) return;
+    if (!imagePreview) return;
 
     setProcessing(true);
     setProgress(10);
@@ -174,50 +174,140 @@ export default function BPOcrCapture({
     try {
       if (onImageCaptured) onImageCaptured(imagePreview);
 
-      // Step 1: predict primary value (systolic)
-      setProgress(30);
-      const sysValue = await predict(imagePreview);
-      setProgress(70);
+      if (isReady) {
+        // ── TF.js CNN inference path ────────────────────────────────────────
 
-      // For a single-image capture we attempt a second inference using
-      // a vertically shifted crop to isolate the diastolic region.
-      // If that fails or is implausible, we report only systolic.
-      let diaValue: number | null = null;
-      // TODO: Pulse detection not yet implemented — requires a separate crop
-      // region or a dedicated pulse model.  Currently always null.
-      const pulseValue: number | null = null;
+        setProgress(30);
+        const sysValue = await predict(imagePreview);
+        setProgress(70);
 
-      try {
-        // Attempt to extract diastolic from lower portion of the image
-        const lowerCrop = await cropLowerRegion(imagePreview);
-        if (lowerCrop) {
-          diaValue = await predict(lowerCrop);
-          setProgress(85);
+        let diaValue: number | null = null;
+        // TODO: Pulse detection not yet implemented — requires a separate crop
+        // region or a dedicated pulse model.  Currently always null.
+        const pulseValue: number | null = null;
+
+        try {
+          const lowerCrop = await cropLowerRegion(imagePreview);
+          if (lowerCrop) {
+            diaValue = await predict(lowerCrop);
+            setProgress(85);
+          }
+        } catch {
+          // Single-image mode — diastolic extraction failed; that's OK.
         }
-      } catch {
-        // Single-image mode — diastolic extraction failed; that's OK.
-      }
 
-      setProgress(100);
+        setProgress(100);
 
-      const reading = combineBPReadings(
-        sysValue,
-        diaValue ?? 0,
-        pulseValue,
-      );
+        const reading = combineBPReadings(sysValue, diaValue ?? 0, pulseValue);
+        onResult(reading);
 
-      // Report to parent callbacks
-      onResult(reading);
+        if (onTextExtracted) {
+          onTextExtracted(`${reading.systolic}/${reading.diastolic}`);
+        }
 
-      // Backward-compatible text callback
-      if (onTextExtracted) {
-        const text = `${reading.systolic}/${reading.diastolic}`;
-        onTextExtracted(text);
-      }
+        if (!isPlausibleBPReading(reading)) {
+          setError(t('imageProcessError'));
+        }
+      } else {
+        // ── Tesseract.js fallback path ──────────────────────────────────────
 
-      // Warn if the reading looks physiologically implausible
-      if (!isPlausibleBPReading(reading)) {
-        setError(t('imageProcessError'));
+        setProgress(20);
+        const preprocessed = await preprocessBPImage(imagePreview);
+        setProgress(35);
+
+        // Primary OCR pass (eng, sparse-text PSM for LCD displays)
+        const primaryOcr = async (input: string) => {
+          const worker = await Tesseract.createWorker('eng');
+          await worker.setParameters({
+            tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT,
+          });
+          const res = await worker.recognize(input);
+          await worker.terminate();
+          return { text: res.data.text.trim(), confidence: res.data.confidence };
+        };
+
+        // Digit-only pass for better seven-segment LCD accuracy
+        const digitOcr = async (input: string) => {
+          const worker = await Tesseract.createWorker('eng');
+          await worker.setParameters({
+            tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT,
+            tessedit_char_whitelist: '0123456789 ',
+          });
+          const res = await worker.recognize(input);
+          await worker.terminate();
+          return res.data.text.trim();
+        };
+
+        let [primaryResult, digitOnlyText] = await Promise.all([
+          primaryOcr(preprocessed),
+          digitOcr(preprocessed),
+        ]);
+        setProgress(60);
+
+        // Fallback A: strip-based OCR when confidence is low
+        if (primaryResult.confidence < 60) {
+          try {
+            const strips = await extractImageStrips(preprocessed);
+            if (strips.length >= 2) {
+              const stripWorker = await Tesseract.createWorker('eng');
+              await stripWorker.setParameters({
+                tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE,
+                tessedit_char_whitelist: '0123456789 ',
+              });
+              const stripTexts: string[] = [];
+              let totalConf = 0;
+              for (const strip of strips) {
+                const res = await stripWorker.recognize(strip.dataUrl);
+                const text = res.data.text.trim();
+                if (text) { stripTexts.push(text); totalConf += res.data.confidence; }
+              }
+              await stripWorker.terminate();
+              if (stripTexts.length >= 2) {
+                const avgConf = totalConf / stripTexts.length;
+                const combined = stripTexts.join('\n');
+                if (avgConf > primaryResult.confidence) {
+                  primaryResult = { text: combined, confidence: avgConf };
+                }
+                if (!digitOnlyText) digitOnlyText = combined;
+              }
+            }
+          } catch { /* strip OCR failed; continue */ }
+        }
+        setProgress(80);
+
+        // Fallback B: contrast-enhanced image without binarisation
+        if (primaryResult.confidence < 60) {
+          try {
+            const lightInput = await preprocessBPImageLight(imagePreview);
+            const [lightResult, lightDigit] = await Promise.all([
+              primaryOcr(lightInput),
+              digitOcr(lightInput),
+            ]);
+            if (lightResult.confidence > primaryResult.confidence) {
+              primaryResult = lightResult;
+              if (lightDigit) digitOnlyText = lightDigit;
+            }
+          } catch { /* light preprocessing OCR failed; continue */ }
+        }
+        setProgress(95);
+
+        const parsed = parseBPText(primaryResult.text, digitOnlyText);
+        const sys = parseInt(parsed.systolic, 10) || 0;
+        const dia = parseInt(parsed.diastolic, 10) || 0;
+        const pulse = parsed.heartRate ? parseInt(parsed.heartRate, 10) || null : null;
+
+        const reading = combineBPReadings(sys, dia, pulse);
+        onResult(reading);
+
+        if (onTextExtracted) {
+          onTextExtracted(primaryResult.text, digitOnlyText);
+        }
+
+        setProgress(100);
+
+        if (!isPlausibleBPReading(reading)) {
+          setError(t('imageProcessError'));
+        }
       }
     } catch {
       setError(t('imageProcessError'));
@@ -270,7 +360,7 @@ export default function BPOcrCapture({
           <div className="space-y-3">
             <button
               onClick={startCamera}
-              disabled={!isReady}
+              disabled={modelLoading}
               className="w-full flex items-center justify-center gap-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-6 rounded-xl transition-colors disabled:opacity-50"
             >
               <Camera className="w-5 h-5" />
@@ -278,7 +368,7 @@ export default function BPOcrCapture({
             </button>
             <button
               onClick={() => fileInputRef.current?.click()}
-              disabled={!isReady}
+              disabled={modelLoading}
               className={`w-full flex items-center justify-center gap-3 font-medium py-3 px-6 rounded-xl transition-colors border disabled:opacity-50 ${
                 isDark
                   ? 'bg-gray-700 hover:bg-gray-600 text-gray-200 border-gray-600'
